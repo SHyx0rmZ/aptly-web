@@ -1,4 +1,4 @@
-module Aptly.Repository exposing (Repository, decodeJson, view)
+module Aptly.Published.Repository exposing (Repository, decodeJson, view)
 
 import Aptly.Source
 import Html
