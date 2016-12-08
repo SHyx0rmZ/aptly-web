@@ -16,12 +16,17 @@ type Msg
     | CancelEditing
     | FinishEditingResult Aptly.Local.Repository.Repository (Result Http.Error Aptly.Local.Repository.Repository)
     | FinishEditing Aptly.Local.Repository.Repository Aptly.Local.Repository.Repository
---    | RepositoryMsg
+    | RepositoryMsg ChangeSet Aptly.Local.Repository.Msg
 
+
+type alias ChangeSet =
+    { old : Aptly.Local.Repository.Repository
+    , new : Aptly.Local.Repository.Repository
+    }
 
 type State
     = Listing
-    | Editing Aptly.Local.Repository.Repository
+    | Editing ChangeSet
 
 init : (Model, Cmd Msg)
 init =
@@ -60,10 +65,17 @@ update msg model =
                 _ = Debug.log "old" oldRepository
                 _ = Debug.log "new" newRepository
             in
-                ({ model | repositories = replace model.repositories oldRepository newRepository }, Cmd.none)
+                ({ model | repositories = replace model.repositories oldRepository newRepository, state = Listing }, Cmd.none)
 
         FinishEditing oldRepository newRepository ->
             (model, Http.send (FinishEditingResult oldRepository) (Aptly.Local.Repository.edit "http://127.0.0.1:8080" newRepository))
+
+        RepositoryMsg changeSet msg ->
+            let
+                (repositoryModel, repositoryMsg) =
+                    Aptly.Local.Repository.update msg changeSet.new
+            in
+                ({ model | state = Editing { changeSet | new = repositoryModel } }, Cmd.map (RepositoryMsg { changeSet | new = repositoryModel }) repositoryMsg)
 
 view : Model -> Html.Html Msg
 view model =
@@ -73,7 +85,7 @@ view model =
             ]
             <| case model.state of
                 Listing ->
-                    (List.intersperse (Html.hr [] []) <| List.map (Aptly.Local.Repository.view (\repository -> State (Editing repository))) model.repositories)
+                    (List.intersperse (Html.hr [] []) <| List.map (Aptly.Local.Repository.view (\repository -> State (Editing <| ChangeSet repository repository))) model.repositories)
 
-                Editing repository ->
-                    [ Aptly.Local.Repository.viewForm False (CancelEditing) (FinishEditing repository) repository ]
+                Editing changeSet ->
+                    [ Aptly.Local.Repository.viewForm False (RepositoryMsg changeSet) (CancelEditing) (FinishEditing changeSet.old) changeSet.new ]

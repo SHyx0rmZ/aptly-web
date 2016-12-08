@@ -1,4 +1,4 @@
-module Aptly.Local.Repository exposing (EditableTarget, Repository, decodeJson, edit, list, update, view, viewForm)
+module Aptly.Local.Repository exposing (Msg, Repository, decodeJson, edit, list, update, view, viewForm)
 
 import Html
 import Html.Attributes
@@ -14,14 +14,11 @@ type alias Repository =
     , defaultComponent : String
     }
 
-type EditableTarget
-    = Name
-    | Comment
-    | DefaultDistribution
-    | DefaultComponent
-
 type Msg
-    = Input EditableTarget String
+    = NameChanged String
+    | CommentChanged String
+    | DefaultDistributionChanged String
+    | DefaultComponentChanged String
 
 decodeJson : Json.Decode.Decoder Repository
 decodeJson =
@@ -59,20 +56,21 @@ list : String -> Http.Request (List Repository)
 list server =
     Http.get (server ++ "/api/repos") (Json.Decode.list decodeJson)
 
-update : EditableTarget -> Repository -> String -> Repository
-update target repository value =
-    case target of
-        Name ->
-            { repository | name = value }
+update : Msg -> Repository -> (Repository, Cmd Msg)
+update msg repository =
+    case msg of
+        NameChanged name ->
+            ({ repository | name = name }, Cmd.none)
 
-        Comment ->
-            { repository | comment = value }
+        CommentChanged comment ->
+            ({ repository | comment = comment }, Cmd.none)
 
-        DefaultDistribution ->
-            { repository | defaultDistribution = value }
+        DefaultDistributionChanged defaultDistribution ->
+            ({ repository | defaultDistribution = defaultDistribution }, Cmd.none)
 
-        DefaultComponent ->
-            { repository | defaultComponent = value }
+        DefaultComponentChanged defaultComponent ->
+            ({ repository | defaultComponent = defaultComponent }, Cmd.none)
+
 
 view : (Repository -> msg) -> Repository -> Html.Html msg
 view editMsg repository =
@@ -98,8 +96,8 @@ view editMsg repository =
             ]
         ]
 
-viewForm : Bool -> msg -> (Repository -> msg) -> Repository -> Html.Html msg
-viewForm isNew cancelMsg saveMsg repository =
+viewForm : Bool -> (Msg -> msg) -> msg -> (Repository -> msg) -> Repository -> Html.Html msg
+viewForm isNew wrapper cancelMsg saveMsg repository =
     Html.form []
         [ Html.label []
             [ Html.text "Name"
@@ -108,17 +106,17 @@ viewForm isNew cancelMsg saveMsg repository =
         , Html.br [] []
         , Html.label []
             [ Html.text "Comment"
-            , Html.input [ {- Html.Events.onInput <| inputMsg Comment, -} Html.Attributes.value repository.comment ] []
+            , Html.input [ Html.Events.onInput <| (\value -> wrapper <| CommentChanged value), Html.Attributes.value repository.comment ] []
             ]
         , Html.br [] []
         , Html.label []
             [ Html.text "Default Distribution"
-            , Html.input [ {- Html.Events.onInput <| inputMsg DefaultDistribution, -} Html.Attributes.value repository.defaultDistribution ] []
+            , Html.input [ Html.Events.onInput <| (\value -> wrapper <| DefaultDistributionChanged value), Html.Attributes.value repository.defaultDistribution ] []
             ]
         , Html.br [] []
         , Html.label []
             [ Html.text "Default Component"
-            , Html.input [ {- Html.Events.onInput <| inputMsg DefaultComponent, -} Html.Attributes.value repository.defaultComponent ] []
+            , Html.input [ Html.Events.onInput <| (\value -> wrapper <| DefaultComponentChanged value), Html.Attributes.value repository.defaultComponent ] []
             ]
         , Html.br [] []
         , Html.button [ Html.Attributes.type_ "button", Html.Events.onClick <| cancelMsg ] [ Html.text "Cancel" ]
