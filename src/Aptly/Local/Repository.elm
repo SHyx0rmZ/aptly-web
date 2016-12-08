@@ -85,51 +85,66 @@ update msg repository =
 
 view : (Repository -> msg) -> Repository -> Html.Html msg
 view editMsg repository =
+    viewTable repository editMsg
+        [ ("Name", repository.name)
+        , ("Comment", repository.comment)
+        , ("Default Distribution", repository.defaultDistribution)
+        , ("Default Component", repository.defaultComponent)
+        ]
+
+viewTable : a -> (a -> msg) -> List (String, String) -> Html.Html msg
+viewTable model editMsg properties =
     Html.table []
-        [ Html.tr []
-            [ Html.th [ Html.Attributes.align "right" ] [ Html.text "Name" ]
-            , Html.td [ Html.Attributes.align "left" ] [ Html.text repository.name ]
+        <| List.append
+            (List.map viewTableRow properties)
+            [ Html.tr []
+                [ Html.button [ Html.Events.onClick <| editMsg model ] [ Html.text "Edit" ]
+                ]
             ]
-        , Html.tr []
-            [ Html.th [ Html.Attributes.align "right" ] [ Html.text "Comment" ]
-            , Html.td [ Html.Attributes.align "left" ] [ Html.text repository.comment ]
+
+viewTableRow : (String, String) -> Html.Html msg
+viewTableRow (label, value) =
+    Html.tr []
+        [ Html.th [ Html.Attributes.align "right" ] [ Html.text label ]
+        , Html.td [ Html.Attributes.align "left" ] [ Html.text value ]
+        ]
+
+viewFormGeneric : a -> msgB -> (a -> msgB) -> (msgA -> msgB) -> List (String, String, Maybe (String -> msgA)) -> Html.Html msgB
+viewFormGeneric model cancelMsg saveMsg wrapper properties =
+    Html.form []
+        <| List.append
+            (List.map (viewFormRow wrapper) properties |> (List.intersperse <| Html.br [] []))
+            [ Html.br [] []
+            , Html.button [ Html.Attributes.type_ "button", Html.Events.onClick <| cancelMsg ] [ Html.text "Cancel" ]
+            , Html.button [ Html.Attributes.type_ "button", Html.Events.onClick <| saveMsg model ] [ Html.text "Save" ]
             ]
-        , Html.tr []
-            [ Html.th [ Html.Attributes.align "right" ] [ Html.text "Default Distribution" ]
-            , Html.td [ Html.Attributes.align "left" ] [ Html.text repository.defaultDistribution ]
-            ]
-        , Html.tr []
-            [ Html.th [ Html.Attributes.align "right" ] [ Html.text "Default Component" ]
-            , Html.td [ Html.Attributes.align "left" ] [ Html.text repository.defaultComponent ]
-            ]
-        , Html.tr []
-            [ Html.button [ Html.Events.onClick <| editMsg repository ] [ Html.text "Edit" ]
-            ]
+
+viewFormRow : (msgA -> msgB) -> (String, String, Maybe (String -> msgA)) -> Html.Html msgB
+viewFormRow wrapper (label, value, maybeMsg) =
+    Html.label []
+        [ Html.text label
+        , case maybeMsg of
+            Nothing ->
+                Html.input [ Html.Attributes.disabled True, Html.Attributes.value value ] []
+
+            Just msg ->
+                Html.input [ Html.Events.onInput <| (\value -> wrapper <| msg value), Html.Attributes.value value ] []
         ]
 
 viewForm : Bool -> (Msg -> msg) -> msg -> (Repository -> msg) -> Repository -> Html.Html msg
 viewForm isNew wrapper cancelMsg saveMsg repository =
-    Html.form []
-        [ Html.label []
-            [ Html.text "Name"
-            , Html.input [ Html.Attributes.value repository.name, Html.Attributes.disabled <| not isNew ] []
+    let
+        nameAction =
+            case isNew of
+                True ->
+                    Just NameChanged
+
+                False ->
+                    Nothing
+    in
+        viewFormGeneric repository cancelMsg saveMsg wrapper
+            [ ("Name", repository.name, nameAction)
+            , ("Comment", repository.comment, Just CommentChanged)
+            , ("Default Distribution", repository.defaultDistribution, Just DefaultDistributionChanged)
+            , ("Default Component", repository.defaultComponent, Just DefaultComponentChanged)
             ]
-        , Html.br [] []
-        , Html.label []
-            [ Html.text "Comment"
-            , Html.input [ Html.Events.onInput <| (\value -> wrapper <| CommentChanged value), Html.Attributes.value repository.comment ] []
-            ]
-        , Html.br [] []
-        , Html.label []
-            [ Html.text "Default Distribution"
-            , Html.input [ Html.Events.onInput <| (\value -> wrapper <| DefaultDistributionChanged value), Html.Attributes.value repository.defaultDistribution ] []
-            ]
-        , Html.br [] []
-        , Html.label []
-            [ Html.text "Default Component"
-            , Html.input [ Html.Events.onInput <| (\value -> wrapper <| DefaultComponentChanged value), Html.Attributes.value repository.defaultComponent ] []
-            ]
-        , Html.br [] []
-        , Html.button [ Html.Attributes.type_ "button", Html.Events.onClick <| cancelMsg ] [ Html.text "Cancel" ]
-        , Html.button [ Html.Attributes.type_ "button", Html.Events.onClick <| saveMsg repository ] [ Html.text "Save" ]
-        ]
