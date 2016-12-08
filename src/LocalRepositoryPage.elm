@@ -9,14 +9,15 @@ import Http
 type alias Model =
     { repositories : List Aptly.Local.Repository.Repository
     , state : State
+    , server : String
     }
 
 type Msg
     = List (Result Http.Error (List Aptly.Local.Repository.Repository))
     | State State
-    | CancelEditing
-    | FinishEditingResult (Maybe Aptly.Local.Repository.Repository) (Result Http.Error Aptly.Local.Repository.Repository)
-    | FinishEditing (Maybe Aptly.Local.Repository.Repository) Aptly.Local.Repository.Repository
+    | CancelChanging
+    | FinishChangingResult (Maybe Aptly.Local.Repository.Repository) (Result Http.Error Aptly.Local.Repository.Repository)
+    | FinishChanging (Maybe Aptly.Local.Repository.Repository) Aptly.Local.Repository.Repository
     | FinishDeletingResult Aptly.Local.Repository.Repository (Result Http.Error String)
     | FinishDeleting Aptly.Local.Repository.Repository
     | RepositoryMsg Aptly.Local.Repository.Msg
@@ -30,9 +31,9 @@ type State
     = Listing
     | Changing ChangeSet
 
-init : (Model, Cmd Msg)
-init =
-    (Model [] Listing Nothing, Cmd.none)
+init : String -> (Model, Cmd Msg)
+init server =
+    (Model [] Listing server, Cmd.none)
 
 replace : List a -> a -> a -> List a
 replace list old new =
@@ -57,23 +58,23 @@ update msg model =
         State (Changing changeSet) ->
             ({ model | state = Changing changeSet }, Cmd.none)
 
-        CancelEditing ->
+        CancelChanging ->
             ({ model | state = Listing }, Cmd.none)
 
-        FinishEditingResult _ (Err _) ->
+        FinishChangingResult _ (Err _) ->
             (model, Cmd.none)
 
-        FinishEditingResult (Just oldRepository) (Ok newRepository) ->
+        FinishChangingResult (Just oldRepository) (Ok newRepository) ->
             ({ model | repositories = replace model.repositories oldRepository newRepository, state = Listing }, Cmd.none)
 
-        FinishEditingResult (Nothing) (Ok newRepository) ->
+        FinishChangingResult (Nothing) (Ok newRepository) ->
             ({ model | repositories = newRepository :: model.repositories, state = Listing }, Cmd.none)
 
-        FinishEditing (Just oldRepository) newRepository ->
-            (model, Http.send (FinishEditingResult <| Just oldRepository) (Aptly.Local.Repository.createEditRequest "http://127.0.0.1:8080" newRepository))
+        FinishChanging (Just oldRepository) newRepository ->
+            (model, Http.send (FinishChangingResult <| Just oldRepository) (Aptly.Local.Repository.createEditRequest model.server newRepository))
 
-        FinishEditing Nothing newRepository ->
-            (model, Http.send (FinishEditingResult <| Nothing) (Aptly.Local.Repository.createCreateRequest "http://127.0.0.1:8080" newRepository))
+        FinishChanging Nothing newRepository ->
+            (model, Http.send (FinishChangingResult <| Nothing) (Aptly.Local.Repository.createCreateRequest model.server newRepository))
 
         FinishDeletingResult _ (Err _) ->
             (model, Cmd.none)
@@ -82,7 +83,7 @@ update msg model =
             ({ model | state = Listing, repositories = List.filter (\repository -> repository /= repositoryToDelete) model.repositories }, Cmd.none)
 
         FinishDeleting repository ->
-            (model, Http.send (FinishDeletingResult <| repository) (Aptly.Local.Repository.createDeleteRequest "http://127.0.0.1:8080" repository False))
+            (model, Http.send (FinishDeletingResult <| repository) (Aptly.Local.Repository.createDeleteRequest model.server repository False))
 
         RepositoryMsg msg ->
             case model.state of
@@ -106,7 +107,12 @@ view model =
             ]
             <| case model.state of
                 Listing ->
-                    (List.intersperse (Html.hr [] []) <| List.map (Aptly.Local.Repository.view (\repository -> State <| Changing <| ChangeSet (Just repository) (Just repository)) (\repository -> State <| Changing <| ChangeSet (Just repository) Nothing)) model.repositories)
+                    (List.intersperse (Html.hr [] []) <| List.map
+                        (Aptly.Local.Repository.view
+                            (\repository -> State <| Changing <| ChangeSet (Just repository) (Just repository))
+                            (\repository -> State <| Changing <| ChangeSet (Just repository) Nothing)
+                        )
+                        model.repositories)
 
                 Changing changeSet ->
                     case (changeSet.old, changeSet.new) of
@@ -114,10 +120,10 @@ view model =
                             []
 
                         (Just oldRepository, Just newRepository) ->
-                            [ Aptly.Local.Repository.viewForm False RepositoryMsg CancelEditing (FinishEditing changeSet.old) newRepository ]
+                            [ Aptly.Local.Repository.viewForm False RepositoryMsg CancelChanging (FinishChanging changeSet.old) newRepository ]
 
                         (Nothing, Just newRepository) ->
-                            [ Aptly.Local.Repository.viewForm True RepositoryMsg CancelEditing (FinishEditing changeSet.old) newRepository ]
+                            [ Aptly.Local.Repository.viewForm True RepositoryMsg CancelChanging (FinishChanging changeSet.old) newRepository ]
 
                         (Just oldRepository, Nothing) ->
                             [ Html.p [] [ Html.text <| "Are you sure you want to delete the repository\"" ++ oldRepository.name ++ "\"?" ]

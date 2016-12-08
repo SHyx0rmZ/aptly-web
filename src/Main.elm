@@ -23,6 +23,7 @@ type Page
 
 type alias Model =
     { page : Page
+    , server : String
     , localRepository : LocalRepositoryPage.Model
     , publishedRepository : PublishedRepositoryPage.Model
     }
@@ -34,16 +35,17 @@ type Msg
 init : (Model, Cmd Msg)
 init =
     let
+        server = "http://127.0.0.1:8080"
+
         (localRepositoryPageModel, localRepositoryPageMsg) =
-            LocalRepositoryPage.init
+            LocalRepositoryPage.init server
 
         (publishedRepositoryPageModel, publishedRepositoryPageMsg) =
             PublishedRepositoryPage.init
     in
-        ( Model LocalRepository localRepositoryPageModel publishedRepositoryPageModel
+        ( Model LocalRepository server localRepositoryPageModel publishedRepositoryPageModel
         , Cmd.batch
---            [ Cmd.map LocalRepositoryMsg <| Http.send LocalRepositoryPage.List <| Aptly.Local.Repository.list "http://127.0.0.1:8080"
-            [ Aptly.Local.Repository.createListRequest "http://127.0.0.1:8080"
+            [ Aptly.Local.Repository.createListRequest server
                 |> Http.send LocalRepositoryPage.List
                 |> Cmd.map LocalRepositoryMsg
             , Cmd.map LocalRepositoryMsg localRepositoryPageMsg
