@@ -1,5 +1,6 @@
-module Aptly.Local.Repository exposing (Msg, Repository, decodeJson, edit, list, update, view, viewForm)
+module Aptly.Local.Repository exposing (Msg, Repository, decodeJson, createCreateRequest, createEditRequest, createListRequest, init, update, view, viewForm)
 
+import Debug
 import Html
 import Html.Attributes
 import Html.Events
@@ -20,6 +21,34 @@ type Msg
     | DefaultDistributionChanged String
     | DefaultComponentChanged String
 
+createCreateRequest : String -> Repository -> Http.Request Repository
+createCreateRequest server repository =
+    Http.request
+        { method = "POST"
+        , headers = []
+        , url = server ++ "/api/repos"
+        , body = Http.jsonBody <| encodeJson True repository
+        , expect = Http.expectJson decodeJson
+        , timeout = Nothing
+        , withCredentials = False
+        }
+
+createEditRequest : String -> Repository -> Http.Request Repository
+createEditRequest server repository =
+    Http.request
+        { method = "PUT"
+        , headers = []
+        , url = server ++ "/api/repos/" ++ repository.name
+        , body = Http.jsonBody <| encodeJson False repository
+        , expect = Http.expectJson decodeJson
+        , timeout = Nothing
+        , withCredentials = False
+        }
+
+createListRequest : String -> Http.Request (List Repository)
+createListRequest server =
+    Http.get (server ++ "/api/repos") (Json.Decode.list decodeJson)
+
 decodeJson : Json.Decode.Decoder Repository
 decodeJson =
     Json.Decode.map4 Repository
@@ -27,18 +56,6 @@ decodeJson =
         (Json.Decode.field "Comment" Json.Decode.string)
         (Json.Decode.field "DefaultDistribution" Json.Decode.string)
         (Json.Decode.field "DefaultComponent" Json.Decode.string)
-
-edit : String -> Repository -> Http.Request Repository
-edit server repository =
-    Http.request
-        { method = "PUT"
-        , headers = []
-        , url = (server ++ "/api/repos/" ++ repository.name)
-        , body = Http.jsonBody (encodeJson False repository)
-        , expect = Http.expectJson decodeJson
-        , timeout = Nothing
-        , withCredentials = False
-        }
 
 encodeJson : Bool -> Repository -> Json.Encode.Value
 encodeJson includeName repository =
@@ -51,6 +68,7 @@ encodeJson includeName repository =
                 False ->
                     []
     in
+        {- aptly currently does not support updating with empty strings and will just ignore them -}
         Json.Encode.object
             <| List.append
                 maybeName
@@ -62,10 +80,6 @@ encodeJson includeName repository =
 init : String -> (Repository, Cmd Msg)
 init name =
     (Repository name "" "" "", Cmd.none)
-
-list : String -> Http.Request (List Repository)
-list server =
-    Http.get (server ++ "/api/repos") (Json.Decode.list decodeJson)
 
 update : Msg -> Repository -> (Repository, Cmd Msg)
 update msg repository =

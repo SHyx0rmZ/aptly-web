@@ -43,7 +43,7 @@ init =
         ( Model LocalRepository localRepositoryPageModel publishedRepositoryPageModel
         , Cmd.batch
 --            [ Cmd.map LocalRepositoryMsg <| Http.send LocalRepositoryPage.List <| Aptly.Local.Repository.list "http://127.0.0.1:8080"
-            [ Aptly.Local.Repository.list "http://127.0.0.1:8080"
+            [ Aptly.Local.Repository.createListRequest "http://127.0.0.1:8080"
                 |> Http.send LocalRepositoryPage.List
                 |> Cmd.map LocalRepositoryMsg
             , Cmd.map LocalRepositoryMsg localRepositoryPageMsg
