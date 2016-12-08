@@ -81,21 +81,25 @@ init : String -> (Repository, Cmd Msg)
 init name =
     (Repository name "" "" "", Cmd.none)
 
-update : Msg -> Repository -> (Repository, Cmd Msg)
-update msg repository =
-    case msg of
-        NameChanged name ->
-            ({ repository | name = name }, Cmd.none)
+update : Msg -> Maybe Repository -> (Maybe Repository, Cmd Msg)
+update msg maybeRepository =
+    case maybeRepository of
+        Nothing ->
+            (Nothing, Cmd.none)
 
-        CommentChanged comment ->
-            ({ repository | comment = comment }, Cmd.none)
+        Just repository ->
+            case msg of
+                NameChanged name ->
+                    (Just { repository | name = name }, Cmd.none)
 
-        DefaultDistributionChanged defaultDistribution ->
-            ({ repository | defaultDistribution = defaultDistribution }, Cmd.none)
+                CommentChanged comment ->
+                    (Just { repository | comment = comment }, Cmd.none)
 
-        DefaultComponentChanged defaultComponent ->
-            ({ repository | defaultComponent = defaultComponent }, Cmd.none)
+                DefaultDistributionChanged defaultDistribution ->
+                    (Just { repository | defaultDistribution = defaultDistribution }, Cmd.none)
 
+                DefaultComponentChanged defaultComponent ->
+                    (Just { repository | defaultComponent = defaultComponent }, Cmd.none)
 
 view : (Repository -> msg) -> Repository -> Html.Html msg
 view editMsg repository =

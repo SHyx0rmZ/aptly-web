@@ -18,28 +18,29 @@ type Msg
     | FinishEditingResult (Maybe Aptly.Local.Repository.Repository) (Result Http.Error Aptly.Local.Repository.Repository)
     | FinishEditing (Maybe Aptly.Local.Repository.Repository) Aptly.Local.Repository.Repository
     | RepositoryMsg Aptly.Local.Repository.Msg
+    | Delete Aptly.Local.Repository.Repository
 
 
 type alias ChangeSet =
     { old : Maybe Aptly.Local.Repository.Repository
-    , new : Aptly.Local.Repository.Repository
+    , new : Maybe Aptly.Local.Repository.Repository
     }
 
 type State
     = Listing
-    | Editing ChangeSet
-    | Creating ChangeSet
+    | Changing ChangeSet
 
 init : (Model, Cmd Msg)
 init =
-    (Model [] Listing, Cmd.none)
+    (Model [] Listing Nothing, Cmd.none)
 
 replace : List a -> a -> a -> List a
 replace list old new =
     List.map (\item ->
-        case item == old of
-            True -> new
-            False -> item) list
+        if item == old then
+            new
+        else
+            item) list
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
@@ -53,11 +54,8 @@ update msg model =
         State Listing ->
             ({ model | state = Listing }, Cmd.none)
 
-        State (Editing changeSet) ->
-            ({ model | state = Editing changeSet }, Cmd.none)
-
-        State (Creating changeSet) ->
-            ({ model | state = Creating changeSet }, Cmd.none)
+        State (Changing changeSet) ->
+            ({ model | state = Changing changeSet }, Cmd.none)
 
         CancelEditing ->
             ({ model | state = Listing }, Cmd.none)
@@ -79,18 +77,12 @@ update msg model =
 
         RepositoryMsg msg ->
             case model.state of
-                Editing changeSet ->
+                Changing changeSet ->
                     let
                         (repositoryModel, repositoryMsg) =
                             Aptly.Local.Repository.update msg changeSet.new
                     in
-                        ({ model | state = Editing { changeSet | new = repositoryModel } }, Cmd.map RepositoryMsg repositoryMsg)
-                Creating changeSet ->
-                    let
-                        (repositoryModel, repositoryMsg) =
-                            Aptly.Local.Repository.update msg changeSet.new
-                    in
-                        ({ model | state = Creating { changeSet | new = repositoryModel } }, Cmd.map RepositoryMsg repositoryMsg)
+                        ({ model | state = Changing { changeSet | new = repositoryModel } }, Cmd.map RepositoryMsg repositoryMsg)
 
                 Listing ->
                     (model, Cmd.none)
@@ -100,15 +92,23 @@ view model =
     Html.div []
         <| List.append
             [ Html.h1 [] [ Html.text "Local Repositories" ]
-            , Html.button [ Html.Events.onClick (State <| Creating <| ChangeSet Nothing <| Aptly.Local.Repository.Repository "" "" "" "") ] [ Html.text "Create" ]
+            , Html.button [ Html.Events.onClick (State <| Changing <| ChangeSet Nothing <| Just <| Aptly.Local.Repository.Repository "" "" "" "") ] [ Html.text "Create" ]
             , Html.hr [] []
             ]
             <| case model.state of
                 Listing ->
-                    (List.intersperse (Html.hr [] []) <| List.map (Aptly.Local.Repository.view (\repository -> State (Editing <| ChangeSet (Just repository) repository))) model.repositories)
+                    (List.intersperse (Html.hr [] []) <| List.map (Aptly.Local.Repository.view (\repository -> State <| Changing <| ChangeSet (Just repository) (Just repository)) Delete) model.repositories)
 
-                Editing changeSet ->
-                    [ Aptly.Local.Repository.viewForm False RepositoryMsg CancelEditing (FinishEditing changeSet.old) changeSet.new ]
+                Changing changeSet ->
+                    case (changeSet.old, changeSet.new) of
+                        (Nothing, Nothing) ->
+                            []
 
-                Creating changeSet ->
-                    [ Aptly.Local.Repository.viewForm True RepositoryMsg CancelEditing (FinishEditing changeSet.old) changeSet.new ]
+                        (Just oldRepository, Just newRepository) ->
+                            [ Aptly.Local.Repository.viewForm False RepositoryMsg CancelEditing (FinishEditing changeSet.old) newRepository ]
+
+                        (Nothing, Just newRepository) ->
+                            [ Aptly.Local.Repository.viewForm True RepositoryMsg CancelEditing (FinishEditing changeSet.old) newRepository ]
+
+                        (Just oldRepository, Nothing) ->
+                            []
