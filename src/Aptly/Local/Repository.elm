@@ -34,19 +34,30 @@ edit server repository =
         { method = "PUT"
         , headers = []
         , url = (server ++ "/api/repos/" ++ repository.name)
-        , body = Http.jsonBody (encodeJson repository)
+        , body = Http.jsonBody (encodeJson False repository)
         , expect = Http.expectJson decodeJson
         , timeout = Nothing
         , withCredentials = False
         }
 
-encodeJson : Repository -> Json.Encode.Value
-encodeJson repository =
-    Json.Encode.object
-        [ ("Comment", Json.Encode.string repository.comment)
-        , ("DefaultDistribution", Json.Encode.string repository.defaultDistribution)
-        , ("DefaultComponent", Json.Encode.string repository.defaultComponent)
-        ]
+encodeJson : Bool -> Repository -> Json.Encode.Value
+encodeJson includeName repository =
+    let
+        maybeName =
+            case includeName of
+                True ->
+                    [ ("Name", Json.Encode.string repository.name) ]
+
+                False ->
+                    []
+    in
+        Json.Encode.object
+            <| List.append
+                maybeName
+                [ ("Comment", Json.Encode.string repository.comment)
+                , ("DefaultDistribution", Json.Encode.string repository.defaultDistribution)
+                , ("DefaultComponent", Json.Encode.string repository.defaultComponent)
+                ]
 
 init : String -> (Repository, Cmd Msg)
 init name =
