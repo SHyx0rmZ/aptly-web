@@ -17,9 +17,9 @@ type Msg
     | CancelEditing
     | FinishEditingResult (Maybe Aptly.Local.Repository.Repository) (Result Http.Error Aptly.Local.Repository.Repository)
     | FinishEditing (Maybe Aptly.Local.Repository.Repository) Aptly.Local.Repository.Repository
+    | FinishDeletingResult Aptly.Local.Repository.Repository (Result Http.Error String)
+    | FinishDeleting Aptly.Local.Repository.Repository
     | RepositoryMsg Aptly.Local.Repository.Msg
-    | Delete Aptly.Local.Repository.Repository
-
 
 type alias ChangeSet =
     { old : Maybe Aptly.Local.Repository.Repository
@@ -75,6 +75,15 @@ update msg model =
         FinishEditing Nothing newRepository ->
             (model, Http.send (FinishEditingResult <| Nothing) (Aptly.Local.Repository.createCreateRequest "http://127.0.0.1:8080" newRepository))
 
+        FinishDeletingResult _ (Err _) ->
+            (model, Cmd.none)
+
+        FinishDeletingResult repositoryToDelete (Ok _) ->
+            ({ model | state = Listing, repositories = List.filter (\repository -> repository /= repositoryToDelete) model.repositories }, Cmd.none)
+
+        FinishDeleting repository ->
+            (model, Http.send (FinishDeletingResult <| repository) (Aptly.Local.Repository.createDeleteRequest "http://127.0.0.1:8080" repository False))
+
         RepositoryMsg msg ->
             case model.state of
                 Changing changeSet ->
@@ -97,7 +106,7 @@ view model =
             ]
             <| case model.state of
                 Listing ->
-                    (List.intersperse (Html.hr [] []) <| List.map (Aptly.Local.Repository.view (\repository -> State <| Changing <| ChangeSet (Just repository) (Just repository)) Delete) model.repositories)
+                    (List.intersperse (Html.hr [] []) <| List.map (Aptly.Local.Repository.view (\repository -> State <| Changing <| ChangeSet (Just repository) (Just repository)) (\repository -> State <| Changing <| ChangeSet (Just repository) Nothing)) model.repositories)
 
                 Changing changeSet ->
                     case (changeSet.old, changeSet.new) of
@@ -111,4 +120,9 @@ view model =
                             [ Aptly.Local.Repository.viewForm True RepositoryMsg CancelEditing (FinishEditing changeSet.old) newRepository ]
 
                         (Just oldRepository, Nothing) ->
-                            []
+                            [ Html.p [] [ Html.text <| "Are you sure you want to delete the repository\"" ++ oldRepository.name ++ "\"?" ]
+                            , Html.strong [] [ Html.text "Warning!" ]
+                            , Html.text " This action cannot be undone!"
+                            , Html.button [ Html.Events.onClick <| State Listing ] [ Html.text "Cancel" ]
+                            , Html.button [ Html.Events.onClick <| FinishDeleting oldRepository ] [ Html.text "Delete" ]
+                            ]

@@ -1,4 +1,4 @@
-module Aptly.Local.Repository exposing (Msg, Repository, decodeJson, createCreateRequest, createEditRequest, createListRequest, init, update, view, viewForm)
+module Aptly.Local.Repository exposing (Msg, Repository, decodeJson, createCreateRequest, createDeleteRequest, createEditRequest, createListRequest, init, update, view, viewForm)
 
 import Debug
 import Html
@@ -29,6 +29,18 @@ createCreateRequest server repository =
         , url = server ++ "/api/repos"
         , body = Http.jsonBody <| encodeJson True repository
         , expect = Http.expectJson decodeJson
+        , timeout = Nothing
+        , withCredentials = False
+        }
+
+createDeleteRequest : String -> Repository -> Bool ->  Http.Request String
+createDeleteRequest server repository force =
+    Http.request
+        { method = "DELETE"
+        , headers = []
+        , url = server ++ "/api/repos/" ++ repository.name
+        , body = Http.jsonBody <| Json.Encode.object [ ("force", Json.Encode.bool force ) ]
+        , expect = Http.expectString
         , timeout = Nothing
         , withCredentials = False
         }
@@ -101,22 +113,24 @@ update msg maybeRepository =
                 DefaultComponentChanged defaultComponent ->
                     (Just { repository | defaultComponent = defaultComponent }, Cmd.none)
 
-view : (Repository -> msg) -> Repository -> Html.Html msg
-view editMsg repository =
-    viewTable repository editMsg
+
+view : (Repository -> msg) -> (Repository -> msg) -> Repository -> Html.Html msg
+view editMsg deleteMsg repository =
+    viewTable repository editMsg deleteMsg
         [ ("Name", repository.name)
         , ("Comment", repository.comment)
         , ("Default Distribution", repository.defaultDistribution)
         , ("Default Component", repository.defaultComponent)
         ]
 
-viewTable : a -> (a -> msg) -> List (String, String) -> Html.Html msg
-viewTable model editMsg properties =
+viewTable : a -> (a -> msg) -> (a -> msg) -> List (String, String) -> Html.Html msg
+viewTable model editMsg deleteMsg properties =
     Html.table []
         <| List.append
             (List.map viewTableRow properties)
             [ Html.tr []
                 [ Html.button [ Html.Events.onClick <| editMsg model ] [ Html.text "Edit" ]
+                , Html.button [ Html.Events.onClick <| deleteMsg model ] [ Html.text "Delete" ]
                 ]
             ]
 
