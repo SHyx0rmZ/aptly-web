@@ -52,7 +52,7 @@ update msg model =
             (model, Cmd.none)
 
         List (Ok repositories) ->
-            ({ model | repositories = repositories }, Cmd.none)
+            ({ model | repositories = List.sortBy .name repositories }, Cmd.none)
 
         State Listing ->
             ({ model | state = Listing, force = False }, Cmd.none)
@@ -67,7 +67,7 @@ update msg model =
             ({ model | repositories = replace model.repositories oldRepository newRepository, state = Listing }, Cmd.none)
 
         FinishChangingResult (Nothing) (Ok newRepository) ->
-            ({ model | repositories = newRepository :: model.repositories, state = Listing }, Cmd.none)
+            ({ model | repositories = List.sortBy .name <| newRepository :: model.repositories, state = Listing }, Cmd.none)
 
         FinishChanging (Just oldRepository) newRepository ->
             (model, Http.send (FinishChangingResult <| Just oldRepository) (Aptly.Local.Repository.createEditRequest model.server newRepository))
