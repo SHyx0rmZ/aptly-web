@@ -17,7 +17,6 @@ type alias Model =
 type Msg
     = List (Result Http.Error (List Aptly.Local.Repository.Repository))
     | State State
-    | CancelChanging
     | FinishChangingResult (Maybe Aptly.Local.Repository.Repository) (Result Http.Error Aptly.Local.Repository.Repository)
     | FinishChanging (Maybe Aptly.Local.Repository.Repository) Aptly.Local.Repository.Repository
     | FinishDeletingResult Aptly.Local.Repository.Repository (Result Http.Error String)
@@ -60,9 +59,6 @@ update msg model =
 
         State (Changing changeSet) ->
             ({ model | state = Changing changeSet }, Cmd.none)
-
-        CancelChanging ->
-            ({ model | state = Listing }, Cmd.none)
 
         FinishChangingResult _ (Err _) ->
             (model, Cmd.none)
@@ -126,10 +122,10 @@ view model =
                             []
 
                         (Just oldRepository, Just newRepository) ->
-                            [ Aptly.Local.Repository.viewForm False RepositoryMsg CancelChanging (FinishChanging changeSet.old) newRepository ]
+                            [ Aptly.Local.Repository.viewForm False RepositoryMsg (State Listing) (FinishChanging changeSet.old) newRepository ]
 
                         (Nothing, Just newRepository) ->
-                            [ Aptly.Local.Repository.viewForm True RepositoryMsg CancelChanging (FinishChanging changeSet.old) newRepository ]
+                            [ Aptly.Local.Repository.viewForm True RepositoryMsg (State Listing) (FinishChanging changeSet.old) newRepository ]
 
                         (Just oldRepository, Nothing) ->
                             [ Html.p [] [ Html.text <| "Are you sure you want to delete the repository\"" ++ oldRepository.name ++ "\"?" ]
