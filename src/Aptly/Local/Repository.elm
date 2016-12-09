@@ -1,4 +1,4 @@
-module Aptly.Local.Repository exposing (Msg, Repository, decodeJson, createCreateRequest, createDeleteRequest, createEditRequest, createListRequest, init, update, view, viewForm)
+module Aptly.Local.Repository exposing (Msg, Repository, decodeJson, createCreateRequest, createDeleteRequest, createEditRequest, createListRequest, init, update, view, viewTable, viewForm)
 
 import Debug
 import Html
@@ -123,6 +123,7 @@ view editMsg deleteMsg repository =
         , ("Default Component", repository.defaultComponent)
         ]
 
+{-| Renders a table. -}
 viewTable : a -> (a -> msg) -> (a -> msg) -> List (String, String) -> Html.Html msg
 viewTable model editMsg deleteMsg properties =
     Html.table []
