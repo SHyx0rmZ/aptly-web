@@ -3,6 +3,7 @@ module LocalRepositoryPage exposing (..)
 import Aptly.Local.Repository
 import Debug
 import Html
+import Html.Attributes
 import Html.Events
 import Http
 
@@ -10,6 +11,7 @@ type alias Model =
     { repositories : List Aptly.Local.Repository.Repository
     , state : State
     , server : String
+    , force : Bool
     }
 
 type Msg
@@ -21,6 +23,7 @@ type Msg
     | FinishDeletingResult Aptly.Local.Repository.Repository (Result Http.Error String)
     | FinishDeleting Aptly.Local.Repository.Repository
     | RepositoryMsg Aptly.Local.Repository.Msg
+    | SetForce Bool
 
 type alias ChangeSet =
     { old : Maybe Aptly.Local.Repository.Repository
@@ -33,7 +36,7 @@ type State
 
 init : String -> (Model, Cmd Msg)
 init server =
-    (Model [] Listing server, Aptly.Local.Repository.createListRequest server |> Http.send List)
+    (Model [] Listing server False, Aptly.Local.Repository.createListRequest server |> Http.send List)
 
 replace : List a -> a -> a -> List a
 replace list old new =
@@ -53,7 +56,7 @@ update msg model =
             ({ model | repositories = repositories }, Cmd.none)
 
         State Listing ->
-            ({ model | state = Listing }, Cmd.none)
+            ({ model | state = Listing, force = False }, Cmd.none)
 
         State (Changing changeSet) ->
             ({ model | state = Changing changeSet }, Cmd.none)
@@ -80,10 +83,10 @@ update msg model =
             (model, Cmd.none)
 
         FinishDeletingResult repositoryToDelete (Ok _) ->
-            ({ model | state = Listing, repositories = List.filter (\repository -> repository /= repositoryToDelete) model.repositories }, Cmd.none)
+            ({ model | state = Listing, force = False, repositories = List.filter (\repository -> repository /= repositoryToDelete) model.repositories }, Cmd.none)
 
         FinishDeleting repository ->
-            (model, Http.send (FinishDeletingResult <| repository) (Aptly.Local.Repository.createDeleteRequest model.server repository False))
+            (model, Http.send (FinishDeletingResult <| repository) (Aptly.Local.Repository.createDeleteRequest model.server repository model.force))
 
         RepositoryMsg msg ->
             case model.state of
@@ -96,6 +99,9 @@ update msg model =
 
                 Listing ->
                     (model, Cmd.none)
+
+        SetForce force ->
+            ({ model | force = force }, Cmd.none)
 
 view : Model -> Html.Html Msg
 view model =
@@ -129,6 +135,10 @@ view model =
                             [ Html.p [] [ Html.text <| "Are you sure you want to delete the repository\"" ++ oldRepository.name ++ "\"?" ]
                             , Html.strong [] [ Html.text "Warning!" ]
                             , Html.text " This action cannot be undone!"
+                            , Html.div []
+                                [ Html.input [ Html.Events.onClick <| SetForce <| not model.force, Html.Attributes.type_ "checkbox", Html.Attributes.checked model.force ] []
+                                , Html.text "Force"
+                                ]
                             , Html.button [ Html.Events.onClick <| State Listing ] [ Html.text "Cancel" ]
                             , Html.button [ Html.Events.onClick <| FinishDeleting oldRepository ] [ Html.text "Delete" ]
                             ]

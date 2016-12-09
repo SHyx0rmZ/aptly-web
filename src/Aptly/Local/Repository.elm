@@ -35,15 +35,22 @@ createCreateRequest server repository =
 
 createDeleteRequest : String -> Repository -> Bool ->  Http.Request String
 createDeleteRequest server repository force =
-    Http.request
-        { method = "DELETE"
-        , headers = []
-        , url = server ++ "/api/repos/" ++ repository.name
-        , body = Http.jsonBody <| Json.Encode.object [ ("force", Json.Encode.bool force ) ]
-        , expect = Http.expectString
-        , timeout = Nothing
-        , withCredentials = False
-        }
+    let
+        query =
+            if force then
+                "?force=1"
+            else
+                ""
+    in
+        Http.request
+            { method = "DELETE"
+            , headers = []
+            , url = server ++ "/api/repos/" ++ repository.name ++ query
+            , body = Http.emptyBody
+            , expect = Http.expectString
+            , timeout = Nothing
+            , withCredentials = False
+            }
 
 createEditRequest : String -> Repository -> Http.Request Repository
 createEditRequest server repository =
