@@ -1,7 +1,8 @@
-module Aptly.Published.Repository exposing (Repository, decodeJson, view)
+module Aptly.Published.Repository exposing (Repository, createListRequest, decodeJson, view)
 
 import Aptly.Source
 import Html
+import Http
 import Json.Decode
 
 type alias Repository =
@@ -14,6 +15,10 @@ type alias Repository =
     , label : String
     , origin : String
     }
+
+createListRequest : String -> Http.Request (List Repository)
+createListRequest server =
+    Http.get (server ++ "/api/publish") (Json.Decode.list decodeJson)
 
 decodeJson : Json.Decode.Decoder Repository
 decodeJson =

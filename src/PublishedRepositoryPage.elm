@@ -6,13 +6,15 @@ import Http
 
 type alias Model =
     { repositories : List Aptly.Published.Repository.Repository
+    , server : String
     }
 
 type Msg
     = List (Result Http.Error (List Aptly.Published.Repository.Repository))
 
-init =
-    (Model [], Cmd.none)
+init : String -> (Model, Cmd Msg)
+init server =
+    (Model [] server, Aptly.Published.Repository.createListRequest server |> Http.send List)
 
 update msg model =
     case msg of

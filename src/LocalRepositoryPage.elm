@@ -33,7 +33,7 @@ type State
 
 init : String -> (Model, Cmd Msg)
 init server =
-    (Model [] Listing server, Cmd.none)
+    (Model [] Listing server, Aptly.Local.Repository.createListRequest server |> Http.send List)
 
 replace : List a -> a -> a -> List a
 replace list old new =

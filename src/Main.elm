@@ -4,9 +4,11 @@ import Aptly.Local.Repository
 import Aptly.Published.Repository
 import Aptly.Source
 import Html
+import Html.Events
 import Http
 import Json.Decode
 import LocalRepositoryPage
+import PackagePage
 import PublishedRepositoryPage
 
 main =
@@ -19,17 +21,21 @@ main =
 
 type Page
     = LocalRepository
+    | Package
     | PublishedRepository
 
 type alias Model =
     { page : Page
     , server : String
     , localRepository : LocalRepositoryPage.Model
+    , package : PackagePage.Model
     , publishedRepository : PublishedRepositoryPage.Model
     }
 
 type Msg
     = LocalRepositoryMsg LocalRepositoryPage.Msg
+    | PackageMsg PackagePage.Msg
+    | Page Page
     | PublishedRepositoryMsg PublishedRepositoryPage.Msg
 
 init : (Model, Cmd Msg)
@@ -40,15 +46,16 @@ init =
         (localRepositoryPageModel, localRepositoryPageMsg) =
             LocalRepositoryPage.init server
 
+        (packagePageModel, packagePageMsg) =
+            PackagePage.init server
+
         (publishedRepositoryPageModel, publishedRepositoryPageMsg) =
-            PublishedRepositoryPage.init
+            PublishedRepositoryPage.init server
     in
-        ( Model LocalRepository server localRepositoryPageModel publishedRepositoryPageModel
+        ( Model LocalRepository server localRepositoryPageModel packagePageModel publishedRepositoryPageModel
         , Cmd.batch
-            [ Aptly.Local.Repository.createListRequest server
-                |> Http.send LocalRepositoryPage.List
-                |> Cmd.map LocalRepositoryMsg
-            , Cmd.map LocalRepositoryMsg localRepositoryPageMsg
+            [ Cmd.map LocalRepositoryMsg localRepositoryPageMsg
+            , Cmd.map PackageMsg packagePageMsg
             , Cmd.map PublishedRepositoryMsg publishedRepositoryPageMsg
             ]
         )
@@ -63,6 +70,16 @@ update msg model =
             in
                 ({ model | localRepository = localRepositoryPageModel }, Cmd.map LocalRepositoryMsg localRepositoryPageMsg)
 
+        PackageMsg packageMsg ->
+            let
+                (packagePageModel, packagePageMsg) =
+                    PackagePage.update packageMsg model.package
+            in
+                ({ model | package = packagePageModel }, Cmd.map PackageMsg packagePageMsg)
+
+        Page page ->
+            ({ model | page = page }, Cmd.none)
+
         PublishedRepositoryMsg publishedRepositoryMsg ->
             let
                 (publishedRepositoryPageModel, publishedRepositoryPageMsg) =
@@ -72,12 +89,21 @@ update msg model =
 
 view : Model -> Html.Html Msg
 view model =
-    case model.page of
-        LocalRepository ->
-            Html.map LocalRepositoryMsg <| LocalRepositoryPage.view model.localRepository
+    Html.div []
+        [ Html.button [ Html.Events.onClick <| Page LocalRepository ] [ Html.text "Local Repositories" ]
+        , Html.button [ Html.Events.onClick <| Page Package ] [ Html.text "Packages" ]
+        , Html.button [ Html.Events.onClick <| Page PublishedRepository ] [ Html.text "Published Repositories" ]
+        , Html.hr [] []
+        , case model.page of
+            LocalRepository ->
+                Html.map LocalRepositoryMsg <| LocalRepositoryPage.view model.localRepository
 
-        PublishedRepository ->
-            Html.map PublishedRepositoryMsg <| PublishedRepositoryPage.view model.publishedRepository
+            Package ->
+                Html.map PackageMsg <| PackagePage.view model.package
+
+            PublishedRepository ->
+                Html.map PublishedRepositoryMsg <| PublishedRepositoryPage.view model.publishedRepository
+        ]
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
