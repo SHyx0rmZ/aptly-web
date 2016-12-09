@@ -1,5 +1,6 @@
 module Aptly.Published.Repository exposing (Repository, createListRequest, decodeJson, view)
 
+import Aptly.Generic
 import Aptly.Source
 import Html
 import Http
@@ -33,12 +34,13 @@ decodeJson =
         (Json.Decode.field "Origin" Json.Decode.string)
 
 view : Repository -> Html.Html msg
-view repo =
-    Html.li []
-        [ Html.div []
-            <| List.append
-                [ Html.text (repo.prefix ++ "/" ++ repo.distribution)
-                , Html.br [] []
-                ]
-                (List.map Aptly.Source.view repo.sources)
+view repository =
+    Aptly.Generic.viewTable repository
+        [ ("Storage", repository.storage)
+        , ("Prefix", repository.prefix)
+        , ("Distribution", repository.distribution)
+        , ("Source Kind", repository.sourceKind)
+        , ("Label", repository.label)
+        , ("Origin", repository.origin)
         ]
+        Nothing

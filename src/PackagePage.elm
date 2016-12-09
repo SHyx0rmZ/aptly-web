@@ -35,4 +35,4 @@ view model =
         <| List.append
             [ Html.h1 [] [ Html.text "Packages" ]
             ]
-            <| List.map (Aptly.Package.view Edit Delete) model.packages
+            <| List.map Aptly.Package.view model.packages

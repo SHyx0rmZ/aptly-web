@@ -1,6 +1,6 @@
 module Aptly.Package exposing (Package, createShowRequest, view)
 
-import Aptly.Local.Repository
+import Aptly.Generic
 import Html
 import Http
 import Json.Decode
@@ -72,10 +72,11 @@ decodeJsonProperties =
         |: (Json.Decode.maybe Json.Decode.string |> Json.Decode.field "Source")
         |: (Json.Decode.maybe Json.Decode.string |> Json.Decode.field "Version")
 
-view : (Package -> msg) -> (Package -> msg) -> Package -> Html.Html msg
-view editMsg deleteMsg package =
-    Aptly.Local.Repository.viewTable package editMsg deleteMsg
+view : Package -> Html.Html msg
+view package =
+    Aptly.Generic.viewTable package
         [ ("Key", package.key)
         , ("Short Key", package.shortKey)
         , ("Files Hash", package.filesHash)
         ]
+        Nothing

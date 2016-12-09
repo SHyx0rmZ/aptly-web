@@ -29,4 +29,4 @@ view model =
         <| List.append
             [ Html.h1 [] [ Html.text "Published Repositories" ]
             ]
-            (List.map Aptly.Published.Repository.view model.repositories)
+            <| List.intersperse (Html.hr [] []) <| List.map Aptly.Published.Repository.view model.repositories
