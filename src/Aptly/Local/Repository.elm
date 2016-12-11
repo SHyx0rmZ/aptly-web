@@ -88,7 +88,6 @@ encodeJson includeName repository =
                 False ->
                     []
     in
-        {- aptly currently does not support updating with empty strings and will just ignore them -}
         Json.Encode.object
             <| List.append
                 maybeName

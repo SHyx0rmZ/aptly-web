@@ -1,5 +1,6 @@
 module LocalRepositoryPage exposing (..)
 
+import Aptly.Generic
 import Aptly.Local.Repository
 import Debug
 import Html
@@ -37,14 +38,6 @@ init : String -> (Model, Cmd Msg)
 init server =
     (Model [] Listing server False, Aptly.Local.Repository.createListRequest server |> Http.send List)
 
-replace : List a -> a -> a -> List a
-replace list old new =
-    List.map (\item ->
-        if item == old then
-            new
-        else
-            item) list
-
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
     case msg of
@@ -64,7 +57,7 @@ update msg model =
             (model, Cmd.none)
 
         FinishChangingResult (Just oldRepository) (Ok newRepository) ->
-            ({ model | repositories = replace model.repositories oldRepository newRepository, state = Listing }, Cmd.none)
+            ({ model | repositories = Aptly.Generic.replace model.repositories oldRepository newRepository, state = Listing }, Cmd.none)
 
         FinishChangingResult (Nothing) (Ok newRepository) ->
             ({ model | repositories = List.sortBy .name <| newRepository :: model.repositories, state = Listing }, Cmd.none)

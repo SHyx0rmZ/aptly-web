@@ -1,11 +1,15 @@
-module Aptly.Published.Repository exposing (Repository, createListRequest, decodeJson, view)
+module Aptly.Published.Repository exposing (Repository, createEditRequest, createListRequest, decodeJson, view, viewForm)
 
 import Aptly.Generic
+import Aptly.SigningOptions
 import Aptly.Source
 import Html
+import Html.Attributes
+import Html.Events
 import Http
 import Json.Decode
-import Json.Decode.Extra
+import Json.Decode.Extra exposing ((|:))
+import Json.Encode
 
 type SourceKind
     = Local
@@ -20,7 +24,20 @@ type alias Repository =
     , architectures : List String
     , label : String
     , origin : String
+    , signing : Maybe Aptly.SigningOptions.SigningOptions
     }
+
+createEditRequest : String -> Repository -> Http.Request Repository
+createEditRequest server repository =
+    Http.request
+        { method = "PUT"
+        , headers = []
+        , url = server ++ "/api/publish/" ++ repository.prefix ++ "/" ++ repository.distribution
+        , body = Http.jsonBody <| encodeJson repository
+        , expect = Http.expectJson decodeJson
+        , timeout = Nothing
+        , withCredentials = False
+        }
 
 createListRequest : String -> Http.Request (List Repository)
 createListRequest server =
@@ -28,15 +45,33 @@ createListRequest server =
 
 decodeJson : Json.Decode.Decoder Repository
 decodeJson =
-    Json.Decode.map8 Repository
-        (Json.Decode.field "Storage" Json.Decode.string)
-        (Json.Decode.field "Prefix" Json.Decode.string)
-        (Json.Decode.field "Distribution" Json.Decode.string)
-        (Json.Decode.field "SourceKind" <| (Json.Decode.string |> Json.Decode.andThen (decodeJsonSourceKind >> Json.Decode.Extra.fromResult)))
-        (Json.Decode.field "Sources" <| Json.Decode.list Aptly.Source.decodeJson)
-        (Json.Decode.field "Architectures" <| Json.Decode.list Json.Decode.string)
-        (Json.Decode.field "Label" Json.Decode.string)
-        (Json.Decode.field "Origin" Json.Decode.string)
+    Json.Decode.succeed Repository
+        |: (Json.Decode.field "Storage" Json.Decode.string)
+        |: (Json.Decode.field "Prefix" Json.Decode.string)
+        |: (Json.Decode.field "Distribution" Json.Decode.string)
+        |: (Json.Decode.field "SourceKind" <| (Json.Decode.string |> Json.Decode.andThen (decodeJsonSourceKind >> Json.Decode.Extra.fromResult)))
+        |: (Json.Decode.field "Sources" <| Json.Decode.list Aptly.Source.decodeJson)
+        |: (Json.Decode.field "Architectures" <| Json.Decode.list Json.Decode.string)
+        |: (Json.Decode.field "Label" Json.Decode.string)
+        |: (Json.Decode.field "Origin" Json.Decode.string)
+        |: (Json.Decode.maybe <| Json.Decode.field "Signing" Aptly.SigningOptions.decodeJson)
+
+encodeJson : Repository -> Json.Encode.Value
+encodeJson repository =
+    case repository.sourceKind of
+        Local ->
+            Json.Encode.object
+                [ ("ForceOverwrite", Json.Encode.bool False)
+                , ("Signing", Aptly.SigningOptions.encodeJson Aptly.SigningOptions.skip)
+                ]
+
+        Snapshot ->
+            Json.Encode.object
+                [ ("ForceOverwrite", Json.Encode.bool False)
+                , ("Snapshots", Json.Encode.list <| List.map Aptly.Source.encodeJson repository.sources)
+                , ("Signing", Aptly.SigningOptions.encodeJson Aptly.SigningOptions.skip)
+                ]
+
 
 decodeJsonSourceKind : (String -> Result String SourceKind)
 decodeJsonSourceKind sourceKind =
@@ -50,8 +85,8 @@ decodeJsonSourceKind sourceKind =
         _ ->
             Err "unknown"
 
-view : Repository -> Html.Html msg
-view repository =
+view : (Repository -> msg) -> Repository -> Html.Html msg
+view updateMsg repository =
     Aptly.Generic.viewTable repository
         [ ("Storage", repository.storage)
         , ("Prefix", repository.prefix)
@@ -59,4 +94,41 @@ view repository =
         , ("Label", repository.label)
         , ("Origin", repository.origin)
         ]
-        Nothing
+        <| Just
+            [ ("Update", updateMsg repository)
+            ]
+
+viewForm : msg -> (Repository -> msg) -> Repository -> Html.Html msg
+viewForm cancelMsg updateMsg repository =
+    Html.div []
+        <| case repository.sourceKind of
+            Local ->
+                [ Html.text "local"
+                , Html.button [ Html.Events.onClick <| cancelMsg ] [ Html.text "Cancel" ]
+                ]
+
+            Snapshot ->
+                [ Html.text "snapshot"
+                , Html.hr [] []
+                , Html.div [] <| List.map viewFormRow repository.sources
+                , Html.hr [] []
+                , Html.button [ Html.Events.onClick <| cancelMsg ] [ Html.text "Cancel" ]
+                , Html.button [ Html.Events.onClick <| updateMsg repository ] [ Html.text "Update" ]
+                ]
+
+viewFormRow : Aptly.Source.Source -> Html.Html msg
+viewFormRow source =
+    Html.table []
+        [ Html.tr []
+            [ Html.th [ Html.Attributes.align "right" ] [ Html.text "Component" ]
+            , Html.td [ Html.Attributes.align "left" ] [ Html.text source.component ]
+            ]
+        , Html.tr []
+            [ Html.th [ Html.Attributes.align "right" ] [ Html.text "Name" ]
+            , Html.td [ Html.Attributes.align "left" ]
+                [ Html.select []
+                    [ Html.option [ Html.Attributes.selected True ] [ Html.text source.name ]
+                    ]
+                ]
+            ]
+        ]

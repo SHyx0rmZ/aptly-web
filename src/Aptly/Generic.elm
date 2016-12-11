@@ -4,6 +4,14 @@ import Html
 import Html.Attributes
 import Html.Events
 
+replace : List a -> a -> a -> List a
+replace list old new =
+    List.map (\item ->
+        if item == old then
+            new
+        else
+            item) list
+
 {-| Renders a table. -}
 viewTable : a -> List (String, String) -> Maybe (List (String, msg)) -> Html.Html msg
 viewTable model properties maybeButtons =
