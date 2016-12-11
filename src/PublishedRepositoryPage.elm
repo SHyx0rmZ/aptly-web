@@ -3,17 +3,20 @@ module PublishedRepositoryPage exposing (..)
 import Aptly.Generic
 import Aptly.Published.Repository
 import Html
+import Html.Attributes
+import Html.Events
 import Http
 
 type alias Model =
     { repositories : List Aptly.Published.Repository.Repository
     , server : String
     , state : State
+    , force : Bool
     }
 
 type alias ChangeSet =
     { old : Aptly.Published.Repository.Repository
-    , new : Aptly.Published.Repository.Repository
+    , new : Maybe Aptly.Published.Repository.Repository
     }
 
 type State
@@ -24,11 +27,14 @@ type Msg
     = List (Result Http.Error (List Aptly.Published.Repository.Repository))
     | State State
     | Update Aptly.Published.Repository.Repository (Result Http.Error (Aptly.Published.Repository.Repository))
-    | Request ((Result Http.Error (Aptly.Published.Repository.Repository)) -> Msg) (Http.Request Aptly.Published.Repository.Repository)
+    | Delete Aptly.Published.Repository.Repository (Result Http.Error String)
+    | Request ((Result Http.Error String) -> Msg) (Http.Request String)
+    | RequestWithBody ((Result Http.Error (Aptly.Published.Repository.Repository)) -> Msg) (Http.Request Aptly.Published.Repository.Repository)
+    | Force Bool
 
 init : String -> (Model, Cmd Msg)
 init server =
-    (Model [] server Listing, Aptly.Published.Repository.createListRequest server |> Http.send List)
+    (Model [] server Listing False, Aptly.Published.Repository.createListRequest server |> Http.send List)
 
 update msg model =
     case msg of
@@ -39,7 +45,7 @@ update msg model =
             ({ model | repositories = repositories }, Cmd.none)
 
         State Listing ->
-            ({ model | state = Listing }, Cmd.none)
+            ({ model | state = Listing, force = False }, Cmd.none)
 
         State (Changing changeSet) ->
             ({ model | state = Changing changeSet }, Cmd.none)
@@ -47,15 +53,31 @@ update msg model =
         Request result request ->
             (model, Http.send result request)
 
-        Update oldRepository (Err _) ->
+        RequestWithBody result request ->
+            (model, Http.send result request)
+
+        Update _ (Err _) ->
             (model, Cmd.none)
 
         Update oldRepository (Ok newRepository) ->
-            ({ model | repositories = Aptly.Generic.replace model.repositories oldRepository newRepository }, Cmd.none)
+            ({ model | state = Listing, repositories = Aptly.Generic.replace model.repositories oldRepository newRepository }, Cmd.none)
+
+        Delete _ (Err _) ->
+            (model, Cmd.none)
+
+        Delete oldRepository (Ok _) ->
+            ({ model | state = Listing, force = False, repositories = List.filter (\repository -> repository /= oldRepository) model.repositories }, Cmd.none)
+
+        Force force ->
+            ({ model | force = force }, Cmd.none)
+
+deleteMsg : String -> Bool -> Aptly.Published.Repository.Repository -> Msg
+deleteMsg server force oldRepository =
+    Request (Delete oldRepository) <| Aptly.Published.Repository.createDeleteRequest server force oldRepository
 
 updateMsg : String -> Aptly.Published.Repository.Repository -> Aptly.Published.Repository.Repository -> Msg
 updateMsg server oldRepository newRepository =
-    Request (Update oldRepository) <| Aptly.Published.Repository.createEditRequest server newRepository
+    RequestWithBody (Update oldRepository) <| Aptly.Published.Repository.createEditRequest server newRepository
 
 view model =
     Html.div []
@@ -64,7 +86,21 @@ view model =
             ]
             <| case model.state of
                 Listing ->
-                    List.intersperse (Html.hr [] []) <| List.map (Aptly.Published.Repository.view (\repository -> State <| Changing <| ChangeSet repository repository)) model.repositories
+                    List.intersperse (Html.hr [] []) <| List.map (Aptly.Published.Repository.view (\repository -> State <| Changing <| ChangeSet repository (Just repository)) (\repository -> State <| Changing <| ChangeSet repository Nothing)) model.repositories
 
                 Changing changeSet ->
-                    [ Aptly.Published.Repository.viewForm (State Listing) (updateMsg model.server changeSet.old) changeSet.new ]
+                    case (changeSet.old, changeSet.new) of
+                        (_, Just newRepository) ->
+                            [ Aptly.Published.Repository.viewForm (State Listing) (updateMsg model.server changeSet.old) newRepository ]
+
+                        (_, Nothing) ->
+                            [ Html.p [] [ Html.text <| "Are you sure you want to unpublish the repository\"" ++ changeSet.old.prefix ++ "/" ++ changeSet.old.distribution ++ "\"?" ]
+                            , Html.strong [] [ Html.text "Warning!" ]
+                            , Html.text " This action cannot be undone!"
+                            , Html.div []
+                                [ Html.input [ Html.Events.onClick <| Force <| not model.force, Html.Attributes.type_ "checkbox", Html.Attributes.checked model.force ] []
+                                , Html.text "Force"
+                                ]
+                            , Html.button [ Html.Events.onClick <| State Listing ] [ Html.text "Cancel" ]
+                            , Html.button [ Html.Events.onClick <| (deleteMsg model.server model.force changeSet.old) ] [ Html.text "Delete" ]
+                            ]

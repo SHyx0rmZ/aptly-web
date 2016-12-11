@@ -36,17 +36,10 @@ createCreateRequest server repository =
 
 createDeleteRequest : String -> Repository -> Bool ->  Http.Request String
 createDeleteRequest server repository force =
-    let
-        query =
-            if force then
-                "?force=1"
-            else
-                ""
-    in
         Http.request
             { method = "DELETE"
             , headers = []
-            , url = server ++ "/api/repos/" ++ repository.name ++ query
+            , url = server ++ "/api/repos/" ++ repository.name ++ (if force then "?force=1" else "")
             , body = Http.emptyBody
             , expect = Http.expectString
             , timeout = Nothing
