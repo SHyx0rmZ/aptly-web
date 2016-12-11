@@ -17,6 +17,18 @@ type Order
     = Name
     | Time
 
+createDeleteRequest : String -> Bool -> Snapshot -> Http.Request String
+createDeleteRequest server force snapshot =
+    Http.request
+        { method = "DELETE"
+        , headers = []
+        , url = server ++ "/api/snapshots/" ++ snapshot.name ++ (if force then "?force=1" else "")
+        , body = Http.emptyBody
+        , expect = Http.expectString
+        , timeout = Nothing
+        , withCredentials = False
+        }
+
 createListRequest : String -> Http.Request (List Snapshot)
 createListRequest server =
     Http.get (server ++ "/api/snapshots") (Json.Decode.list decodeJson)
@@ -32,11 +44,13 @@ init : (Snapshot, Cmd msg)
 init =
     (Snapshot "" "" "", Cmd.none)
 
-view : Snapshot -> Html.Html msg
-view snapshot =
+view : (Snapshot -> msg) -> Snapshot -> Html.Html msg
+view deleteMsg snapshot =
     Aptly.Generic.viewTable snapshot
         [ ("Name", snapshot.name)
         , ("Description", snapshot.description)
         , ("Created At", snapshot.createdAt)
         ]
-        Nothing
+        <| Just
+            [ ("Delete", deleteMsg snapshot)
+            ]

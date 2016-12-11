@@ -99,7 +99,7 @@ view model =
                             [ Aptly.Published.Repository.viewForm (State Listing) (updateMsg model.config.server changeSet.old) newRepository ]
 
                         (_, Nothing) ->
-                            [ Html.p [] [ Html.text <| "Are you sure you want to unpublish the repository\"" ++ changeSet.old.prefix ++ "/" ++ changeSet.old.distribution ++ "\"?" ]
+                            [ Html.p [] [ Html.text <| "Are you sure you want to unpublish the repository \"" ++ changeSet.old.prefix ++ "/" ++ changeSet.old.distribution ++ "\"?" ]
                             , Html.strong [] [ Html.text "Warning!" ]
                             , Html.text " This action cannot be undone!"
                             , Html.div []

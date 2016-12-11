@@ -131,7 +131,7 @@ view model =
                             [ Aptly.Local.Repository.viewForm True RepositoryMsg (State Listing) (createMsg model.config.server changeSet.old) newRepository ]
 
                         (Just oldRepository, Nothing) ->
-                            [ Html.p [] [ Html.text <| "Are you sure you want to delete the repository\"" ++ oldRepository.name ++ "\"?" ]
+                            [ Html.p [] [ Html.text <| "Are you sure you want to delete the repository \"" ++ oldRepository.name ++ "\"?" ]
                             , Html.strong [] [ Html.text "Warning!" ]
                             , Html.text " This action cannot be undone!"
                             , Html.div []
