@@ -35,10 +35,6 @@ type State
     = Listing
     | Changing ChangeSet
 
-init : Aptly.Config.Config -> (Model, Cmd Msg)
-init config =
-    (Model config [] Listing False, Aptly.Local.Repository.createListRequest config.server |> Http.send List)
-
 createMsg : String -> Maybe Aptly.Local.Repository.Repository -> Aptly.Local.Repository.Repository -> Msg
 createMsg server oldRepository newRepository =
     RequestWithBody (Change oldRepository) <| Aptly.Local.Repository.createCreateRequest server newRepository
@@ -46,6 +42,10 @@ createMsg server oldRepository newRepository =
 deleteMsg : String -> Bool -> Aptly.Local.Repository.Repository -> Msg
 deleteMsg server force oldRepository =
     Request (Delete oldRepository) <| Aptly.Local.Repository.createDeleteRequest server force oldRepository
+
+init : Aptly.Config.Config -> (Model, Cmd Msg)
+init config =
+    (Model config [] Listing False, Aptly.Local.Repository.createListRequest config.server |> Http.send List)
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =

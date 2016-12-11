@@ -11,6 +11,7 @@ import Json.Decode
 import LocalRepositoryPage
 import PackagePage
 import PublishedRepositoryPage
+import SnapshotPage
 
 main =
     Html.program
@@ -24,6 +25,7 @@ type Page
     = LocalRepository
     | Package
     | PublishedRepository
+    | Snapshot
 
 type alias Model =
     { page : Page
@@ -31,6 +33,7 @@ type alias Model =
     , localRepository : LocalRepositoryPage.Model
     , package : PackagePage.Model
     , publishedRepository : PublishedRepositoryPage.Model
+    , snapshot : SnapshotPage.Model
     }
 
 type Msg
@@ -38,6 +41,7 @@ type Msg
     | PackageMsg PackagePage.Msg
     | Page Page
     | PublishedRepositoryMsg PublishedRepositoryPage.Msg
+    | SnapshotMsg SnapshotPage.Msg
 
 init : (Model, Cmd Msg)
 init =
@@ -52,12 +56,16 @@ init =
 
         (publishedRepositoryPageModel, publishedRepositoryPageMsg) =
             PublishedRepositoryPage.init config
+
+        (snapshotPageModel, snapshotPageMsg) =
+            SnapshotPage.init config
     in
-        ( Model LocalRepository config localRepositoryPageModel packagePageModel publishedRepositoryPageModel
+        ( Model LocalRepository config localRepositoryPageModel packagePageModel publishedRepositoryPageModel snapshotPageModel
         , Cmd.batch
             [ Cmd.map LocalRepositoryMsg localRepositoryPageMsg
             , Cmd.map PackageMsg packagePageMsg
             , Cmd.map PublishedRepositoryMsg publishedRepositoryPageMsg
+            , Cmd.map SnapshotMsg snapshotPageMsg
             ]
         )
 
@@ -88,12 +96,20 @@ update msg model =
             in
                 ({ model | publishedRepository = publishedRepositoryPageModel }, Cmd.map PublishedRepositoryMsg publishedRepositoryPageMsg)
 
+        SnapshotMsg snapshotMsg ->
+            let
+                (snapshotPageModel, snapshotPageMsg) =
+                    SnapshotPage.update snapshotMsg model.snapshot
+            in
+                ({ model | snapshot = snapshotPageModel }, Cmd.map SnapshotMsg snapshotPageMsg)
+
 view : Model -> Html.Html Msg
 view model =
     Html.div []
         [ Html.button [ Html.Events.onClick <| Page LocalRepository ] [ Html.text "Local Repositories" ]
         , Html.button [ Html.Events.onClick <| Page Package ] [ Html.text "Packages" ]
         , Html.button [ Html.Events.onClick <| Page PublishedRepository ] [ Html.text "Published Repositories" ]
+        , Html.button [ Html.Events.onClick <| Page Snapshot ] [ Html.text "Snapshots" ]
         , Html.hr [] []
         , case model.page of
             LocalRepository ->
@@ -104,6 +120,9 @@ view model =
 
             PublishedRepository ->
                 Html.map PublishedRepositoryMsg <| PublishedRepositoryPage.view model.publishedRepository
+
+            Snapshot ->
+                Html.map SnapshotMsg <| SnapshotPage.view model.snapshot
         ]
 
 subscriptions : Model -> Sub Msg
