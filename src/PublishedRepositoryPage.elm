@@ -1,5 +1,6 @@
 module PublishedRepositoryPage exposing (..)
 
+import Aptly.Config
 import Aptly.Generic
 import Aptly.Published.Repository
 import Html
@@ -8,8 +9,8 @@ import Html.Events
 import Http
 
 type alias Model =
-    { repositories : List Aptly.Published.Repository.Repository
-    , server : String
+    { config : Aptly.Config.Config
+    , repositories : List Aptly.Published.Repository.Repository
     , state : State
     , force : Bool
     }
@@ -32,9 +33,9 @@ type Msg
     | RequestWithBody ((Result Http.Error (Aptly.Published.Repository.Repository)) -> Msg) (Http.Request Aptly.Published.Repository.Repository)
     | Force Bool
 
-init : String -> (Model, Cmd Msg)
-init server =
-    (Model [] server Listing False, Aptly.Published.Repository.createListRequest server |> Http.send List)
+init : Aptly.Config.Config -> (Model, Cmd Msg)
+init config  =
+    (Model config [] Listing False, Aptly.Published.Repository.createListRequest config.server |> Http.send List)
 
 update msg model =
     case msg of
@@ -91,7 +92,7 @@ view model =
                 Changing changeSet ->
                     case (changeSet.old, changeSet.new) of
                         (_, Just newRepository) ->
-                            [ Aptly.Published.Repository.viewForm (State Listing) (updateMsg model.server changeSet.old) newRepository ]
+                            [ Aptly.Published.Repository.viewForm (State Listing) (updateMsg model.config.server changeSet.old) newRepository ]
 
                         (_, Nothing) ->
                             [ Html.p [] [ Html.text <| "Are you sure you want to unpublish the repository\"" ++ changeSet.old.prefix ++ "/" ++ changeSet.old.distribution ++ "\"?" ]
@@ -102,5 +103,5 @@ view model =
                                 , Html.text "Force"
                                 ]
                             , Html.button [ Html.Events.onClick <| State Listing ] [ Html.text "Cancel" ]
-                            , Html.button [ Html.Events.onClick <| (deleteMsg model.server model.force changeSet.old) ] [ Html.text "Delete" ]
+                            , Html.button [ Html.Events.onClick <| (deleteMsg model.config.server model.force changeSet.old) ] [ Html.text "Delete" ]
                             ]

@@ -1,5 +1,6 @@
 module PackagePage exposing (..)
 
+import Aptly.Config
 import Aptly.Package
 import Html
 
@@ -9,13 +10,13 @@ type Msg
     | Delete Aptly.Package.Package
 
 type alias Model =
-    { packages : List Aptly.Package.Package
-    , server : String
+    { config : Aptly.Config.Config
+    , packages : List Aptly.Package.Package
     }
 
-init : String -> (Model, Cmd Msg)
-init server =
-    (Model [] server, Cmd.none)
+init : Aptly.Config.Config -> (Model, Cmd Msg)
+init config =
+    (Model config [], Cmd.none)
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =

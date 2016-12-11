@@ -1,5 +1,6 @@
 module Main exposing (..)
 
+import Aptly.Config
 import Aptly.Local.Repository
 import Aptly.Published.Repository
 import Aptly.Source
@@ -26,7 +27,7 @@ type Page
 
 type alias Model =
     { page : Page
-    , server : String
+    , config : Aptly.Config.Config
     , localRepository : LocalRepositoryPage.Model
     , package : PackagePage.Model
     , publishedRepository : PublishedRepositoryPage.Model
@@ -41,18 +42,18 @@ type Msg
 init : (Model, Cmd Msg)
 init =
     let
-        server = "http://127.0.0.1:8080"
+        config = Aptly.Config.Config "http://127.0.0.1:8080"
 
         (localRepositoryPageModel, localRepositoryPageMsg) =
-            LocalRepositoryPage.init server
+            LocalRepositoryPage.init config
 
         (packagePageModel, packagePageMsg) =
-            PackagePage.init server
+            PackagePage.init config
 
         (publishedRepositoryPageModel, publishedRepositoryPageMsg) =
-            PublishedRepositoryPage.init server
+            PublishedRepositoryPage.init config
     in
-        ( Model LocalRepository server localRepositoryPageModel packagePageModel publishedRepositoryPageModel
+        ( Model LocalRepository config localRepositoryPageModel packagePageModel publishedRepositoryPageModel
         , Cmd.batch
             [ Cmd.map LocalRepositoryMsg localRepositoryPageMsg
             , Cmd.map PackageMsg packagePageMsg

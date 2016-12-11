@@ -1,5 +1,6 @@
 module LocalRepositoryPage exposing (..)
 
+import Aptly.Config
 import Aptly.Generic
 import Aptly.Local.Repository
 import Debug
@@ -9,9 +10,9 @@ import Html.Events
 import Http
 
 type alias Model =
-    { repositories : List Aptly.Local.Repository.Repository
+    { config : Aptly.Config.Config
+    , repositories : List Aptly.Local.Repository.Repository
     , state : State
-    , server : String
     , force : Bool
     }
 
@@ -34,9 +35,9 @@ type State
     = Listing
     | Changing ChangeSet
 
-init : String -> (Model, Cmd Msg)
-init server =
-    (Model [] Listing server False, Aptly.Local.Repository.createListRequest server |> Http.send List)
+init : Aptly.Config.Config -> (Model, Cmd Msg)
+init config =
+    (Model config [] Listing False, Aptly.Local.Repository.createListRequest config.server |> Http.send List)
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
@@ -63,10 +64,10 @@ update msg model =
             ({ model | repositories = List.sortBy .name <| newRepository :: model.repositories, state = Listing }, Cmd.none)
 
         FinishChanging (Just oldRepository) newRepository ->
-            (model, Http.send (FinishChangingResult <| Just oldRepository) (Aptly.Local.Repository.createEditRequest model.server newRepository))
+            (model, Http.send (FinishChangingResult <| Just oldRepository) (Aptly.Local.Repository.createEditRequest model.config.server newRepository))
 
         FinishChanging Nothing newRepository ->
-            (model, Http.send (FinishChangingResult <| Nothing) (Aptly.Local.Repository.createCreateRequest model.server newRepository))
+            (model, Http.send (FinishChangingResult <| Nothing) (Aptly.Local.Repository.createCreateRequest model.config.server newRepository))
 
         FinishDeletingResult _ (Err _) ->
             (model, Cmd.none)
@@ -75,7 +76,7 @@ update msg model =
             ({ model | state = Listing, force = False, repositories = List.filter (\repository -> repository /= repositoryToDelete) model.repositories }, Cmd.none)
 
         FinishDeleting repository ->
-            (model, Http.send (FinishDeletingResult <| repository) (Aptly.Local.Repository.createDeleteRequest model.server repository model.force))
+            (model, Http.send (FinishDeletingResult <| repository) (Aptly.Local.Repository.createDeleteRequest model.config.server repository model.force))
 
         RepositoryMsg msg ->
             case model.state of
