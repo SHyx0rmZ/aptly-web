@@ -34,8 +34,8 @@ createCreateRequest server repository =
         , withCredentials = False
         }
 
-createDeleteRequest : String -> Repository -> Bool ->  Http.Request String
-createDeleteRequest server repository force =
+createDeleteRequest : String -> Bool -> Repository ->  Http.Request String
+createDeleteRequest server force repository =
         Http.request
             { method = "DELETE"
             , headers = []

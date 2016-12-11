@@ -33,6 +33,10 @@ type Msg
     | RequestWithBody ((Result Http.Error (Aptly.Published.Repository.Repository)) -> Msg) (Http.Request Aptly.Published.Repository.Repository)
     | Force Bool
 
+deleteMsg : String -> Bool -> Aptly.Published.Repository.Repository -> Msg
+deleteMsg server force oldRepository =
+    Request (Delete oldRepository) <| Aptly.Published.Repository.createDeleteRequest server force oldRepository
+
 init : Aptly.Config.Config -> (Model, Cmd Msg)
 init config  =
     (Model config [] Listing False, Aptly.Published.Repository.createListRequest config.server |> Http.send List)
@@ -72,10 +76,6 @@ update msg model =
         Force force ->
             ({ model | force = force }, Cmd.none)
 
-deleteMsg : String -> Bool -> Aptly.Published.Repository.Repository -> Msg
-deleteMsg server force oldRepository =
-    Request (Delete oldRepository) <| Aptly.Published.Repository.createDeleteRequest server force oldRepository
-
 updateMsg : String -> Aptly.Published.Repository.Repository -> Aptly.Published.Repository.Repository -> Msg
 updateMsg server oldRepository newRepository =
     RequestWithBody (Update oldRepository) <| Aptly.Published.Repository.createEditRequest server newRepository
@@ -87,7 +87,11 @@ view model =
             ]
             <| case model.state of
                 Listing ->
-                    List.intersperse (Html.hr [] []) <| List.map (Aptly.Published.Repository.view (\repository -> State <| Changing <| ChangeSet repository (Just repository)) (\repository -> State <| Changing <| ChangeSet repository Nothing)) model.repositories
+                    List.intersperse (Html.hr [] [])
+                        <| List.map (Aptly.Published.Repository.view
+                            (\repository -> State <| Changing <| ChangeSet repository (Just repository))
+                            (\repository -> State <| Changing <| ChangeSet repository Nothing)
+                        ) model.repositories
 
                 Changing changeSet ->
                     case (changeSet.old, changeSet.new) of

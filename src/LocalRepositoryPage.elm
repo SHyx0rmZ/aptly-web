@@ -19,12 +19,12 @@ type alias Model =
 type Msg
     = List (Result Http.Error (List Aptly.Local.Repository.Repository))
     | State State
-    | FinishChangingResult (Maybe Aptly.Local.Repository.Repository) (Result Http.Error Aptly.Local.Repository.Repository)
-    | FinishChanging (Maybe Aptly.Local.Repository.Repository) Aptly.Local.Repository.Repository
-    | FinishDeletingResult Aptly.Local.Repository.Repository (Result Http.Error String)
-    | FinishDeleting Aptly.Local.Repository.Repository
+    | Change (Maybe Aptly.Local.Repository.Repository) (Result Http.Error Aptly.Local.Repository.Repository)
+    | Delete Aptly.Local.Repository.Repository (Result Http.Error String)
+    | Request ((Result Http.Error String) -> Msg) (Http.Request String)
+    | RequestWithBody ((Result Http.Error Aptly.Local.Repository.Repository) -> Msg) (Http.Request Aptly.Local.Repository.Repository)
     | RepositoryMsg Aptly.Local.Repository.Msg
-    | SetForce Bool
+    | Force Bool
 
 type alias ChangeSet =
     { old : Maybe Aptly.Local.Repository.Repository
@@ -38,6 +38,14 @@ type State
 init : Aptly.Config.Config -> (Model, Cmd Msg)
 init config =
     (Model config [] Listing False, Aptly.Local.Repository.createListRequest config.server |> Http.send List)
+
+createMsg : String -> Maybe Aptly.Local.Repository.Repository -> Aptly.Local.Repository.Repository -> Msg
+createMsg server oldRepository newRepository =
+    RequestWithBody (Change oldRepository) <| Aptly.Local.Repository.createCreateRequest server newRepository
+
+deleteMsg : String -> Bool -> Aptly.Local.Repository.Repository -> Msg
+deleteMsg server force oldRepository =
+    Request (Delete oldRepository) <| Aptly.Local.Repository.createDeleteRequest server force oldRepository
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
@@ -54,29 +62,26 @@ update msg model =
         State (Changing changeSet) ->
             ({ model | state = Changing changeSet }, Cmd.none)
 
-        FinishChangingResult _ (Err _) ->
+        Change _ (Err _) ->
             (model, Cmd.none)
 
-        FinishChangingResult (Just oldRepository) (Ok newRepository) ->
+        Change (Just oldRepository) (Ok newRepository) ->
             ({ model | repositories = Aptly.Generic.replace model.repositories oldRepository newRepository, state = Listing }, Cmd.none)
 
-        FinishChangingResult (Nothing) (Ok newRepository) ->
+        Change (Nothing) (Ok newRepository) ->
             ({ model | repositories = List.sortBy .name <| newRepository :: model.repositories, state = Listing }, Cmd.none)
 
-        FinishChanging (Just oldRepository) newRepository ->
-            (model, Http.send (FinishChangingResult <| Just oldRepository) (Aptly.Local.Repository.createEditRequest model.config.server newRepository))
-
-        FinishChanging Nothing newRepository ->
-            (model, Http.send (FinishChangingResult <| Nothing) (Aptly.Local.Repository.createCreateRequest model.config.server newRepository))
-
-        FinishDeletingResult _ (Err _) ->
+        Delete _ (Err _) ->
             (model, Cmd.none)
 
-        FinishDeletingResult repositoryToDelete (Ok _) ->
+        Delete repositoryToDelete (Ok _) ->
             ({ model | state = Listing, force = False, repositories = List.filter (\repository -> repository /= repositoryToDelete) model.repositories }, Cmd.none)
 
-        FinishDeleting repository ->
-            (model, Http.send (FinishDeletingResult <| repository) (Aptly.Local.Repository.createDeleteRequest model.config.server repository model.force))
+        Request result request ->
+            (model, Http.send result request)
+
+        RequestWithBody result request ->
+            (model, Http.send result request)
 
         RepositoryMsg msg ->
             case model.state of
@@ -90,8 +95,12 @@ update msg model =
                 Listing ->
                     (model, Cmd.none)
 
-        SetForce force ->
+        Force force ->
             ({ model | force = force }, Cmd.none)
+
+updateMsg : String -> Maybe Aptly.Local.Repository.Repository -> Aptly.Local.Repository.Repository -> Msg
+updateMsg server oldRepository newRepository =
+    RequestWithBody (Change oldRepository) <| Aptly.Local.Repository.createEditRequest server newRepository
 
 view : Model -> Html.Html Msg
 view model =
@@ -116,19 +125,19 @@ view model =
                             []
 
                         (Just oldRepository, Just newRepository) ->
-                            [ Aptly.Local.Repository.viewForm False RepositoryMsg (State Listing) (FinishChanging changeSet.old) newRepository ]
+                            [ Aptly.Local.Repository.viewForm False RepositoryMsg (State Listing) (updateMsg model.config.server changeSet.old) newRepository ]
 
                         (Nothing, Just newRepository) ->
-                            [ Aptly.Local.Repository.viewForm True RepositoryMsg (State Listing) (FinishChanging changeSet.old) newRepository ]
+                            [ Aptly.Local.Repository.viewForm True RepositoryMsg (State Listing) (createMsg model.config.server changeSet.old) newRepository ]
 
                         (Just oldRepository, Nothing) ->
                             [ Html.p [] [ Html.text <| "Are you sure you want to delete the repository\"" ++ oldRepository.name ++ "\"?" ]
                             , Html.strong [] [ Html.text "Warning!" ]
                             , Html.text " This action cannot be undone!"
                             , Html.div []
-                                [ Html.input [ Html.Events.onClick <| SetForce <| not model.force, Html.Attributes.type_ "checkbox", Html.Attributes.checked model.force ] []
+                                [ Html.input [ Html.Events.onClick <| Force <| not model.force, Html.Attributes.type_ "checkbox", Html.Attributes.checked model.force ] []
                                 , Html.text "Force"
                                 ]
                             , Html.button [ Html.Events.onClick <| State Listing ] [ Html.text "Cancel" ]
-                            , Html.button [ Html.Events.onClick <| FinishDeleting oldRepository ] [ Html.text "Delete" ]
+                            , Html.button [ Html.Events.onClick <| deleteMsg model.config.server model.force oldRepository ] [ Html.text "Delete" ]
                             ]
