@@ -105,13 +105,17 @@ view model =
             ]
             <| case model.state of
                 Listing ->
-                    List.intersperse (Html.hr [] [])
-                        <| List.map
-                            ( Aptly.Snapshot.view
-                                (\snapshot -> State <| Changing <| ChangeSet (Just snapshot) (Just snapshot))
-                                (\snapshot -> State <| Changing <|  ChangeSet (Just snapshot) Nothing)
-                            )
-                            model.snapshots
+                    List.append
+                        [ Html.button [ Html.Events.onClick (State <| Changing <| ChangeSet Nothing <| Just <| Aptly.Snapshot.Snapshot "" "" "") ] [ Html.text "Create" ]
+                        , Html.hr [] []
+                        ]
+                        <|List.intersperse (Html.hr [] [])
+                            <| List.map
+                                ( Aptly.Snapshot.view
+                                    (\snapshot -> State <| Changing <| ChangeSet (Just snapshot) (Just snapshot))
+                                    (\snapshot -> State <| Changing <|  ChangeSet (Just snapshot) Nothing)
+                                )
+                                model.snapshots
 
                 Changing changeSet ->
                     case (changeSet.old, changeSet.new) of
@@ -133,6 +137,20 @@ view model =
                                 (editMsg model.config.server oldSnapshot)
                                 SnapshotMsg
                                 newSnapshot
+                            ]
+
+                        (Nothing, Just newSnapshot) ->
+                            [ Html.form []
+                                [ Html.label []
+                                    [ Html.input [ Html.Attributes.type_ "radio", Html.Attributes.selected True ] []
+                                    , Html.text "from local repository"
+                                    ]
+                                , Html.label []
+                                    [ Html.input [ Html.Attributes.type_ "radio", Html.Attributes.disabled True ] []
+                                    , Html.text "from package refs"
+                                    ]
+                                ]
+                            , Html.button [ Html.Events.onClick <| State Listing ] [ Html.text "Cancel" ]
                             ]
 
                         _ ->

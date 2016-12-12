@@ -105,13 +105,13 @@ updateMsg server oldRepository newRepository =
 view : Model -> Html.Html Msg
 view model =
     Html.div []
-        <| List.append
-            [ Html.h1 [] [ Html.text "Local Repositories" ]
-            , Html.button [ Html.Events.onClick (State <| Changing <| ChangeSet Nothing <| Just <| Aptly.Local.Repository.Repository "" "" "" "") ] [ Html.text "Create" ]
-            , Html.hr [] []
-            ]
-            <| case model.state of
-                Listing ->
+        <| case model.state of
+            Listing ->
+                List.append
+                    [ Html.h1 [] [ Html.text "Local Repositories" ]
+                    , Html.button [ Html.Events.onClick (State <| Changing <| ChangeSet Nothing <| Just <| Aptly.Local.Repository.Repository "" "" "" "") ] [ Html.text "Create" ]
+                    , Html.hr [] []
+                    ]
                     (List.intersperse (Html.hr [] []) <| List.map
                         (Aptly.Local.Repository.view
                             (\repository -> State <| Changing <| ChangeSet (Just repository) (Just repository))
@@ -119,25 +119,25 @@ view model =
                         )
                         model.repositories)
 
-                Changing changeSet ->
-                    case (changeSet.old, changeSet.new) of
-                        (Nothing, Nothing) ->
-                            []
+            Changing changeSet ->
+                case (changeSet.old, changeSet.new) of
+                    (Nothing, Nothing) ->
+                        []
 
-                        (Just oldRepository, Just newRepository) ->
-                            [ Aptly.Local.Repository.viewForm False RepositoryMsg (State Listing) (updateMsg model.config.server changeSet.old) newRepository ]
+                    (Just oldRepository, Just newRepository) ->
+                        [ Aptly.Local.Repository.viewForm False RepositoryMsg (State Listing) (updateMsg model.config.server changeSet.old) newRepository ]
 
-                        (Nothing, Just newRepository) ->
-                            [ Aptly.Local.Repository.viewForm True RepositoryMsg (State Listing) (createMsg model.config.server changeSet.old) newRepository ]
+                    (Nothing, Just newRepository) ->
+                        [ Aptly.Local.Repository.viewForm True RepositoryMsg (State Listing) (createMsg model.config.server changeSet.old) newRepository ]
 
-                        (Just oldRepository, Nothing) ->
-                            [ Html.p [] [ Html.text <| "Are you sure you want to delete the repository \"" ++ oldRepository.name ++ "\"?" ]
-                            , Html.strong [] [ Html.text "Warning!" ]
-                            , Html.text " This action cannot be undone!"
-                            , Html.div []
-                                [ Html.input [ Html.Events.onClick <| Force <| not model.force, Html.Attributes.type_ "checkbox", Html.Attributes.checked model.force ] []
-                                , Html.text "Force"
-                                ]
-                            , Html.button [ Html.Events.onClick <| State Listing ] [ Html.text "Cancel" ]
-                            , Html.button [ Html.Events.onClick <| deleteMsg model.config.server model.force oldRepository ] [ Html.text "Delete" ]
+                    (Just oldRepository, Nothing) ->
+                        [ Html.p [] [ Html.text <| "Are you sure you want to delete the repository \"" ++ oldRepository.name ++ "\"?" ]
+                        , Html.strong [] [ Html.text "Warning!" ]
+                        , Html.text " This action cannot be undone!"
+                        , Html.div []
+                            [ Html.input [ Html.Events.onClick <| Force <| not model.force, Html.Attributes.type_ "checkbox", Html.Attributes.checked model.force ] []
+                            , Html.text "Force"
                             ]
+                        , Html.button [ Html.Events.onClick <| State Listing ] [ Html.text "Cancel" ]
+                        , Html.button [ Html.Events.onClick <| deleteMsg model.config.server model.force oldRepository ] [ Html.text "Delete" ]
+                        ]
