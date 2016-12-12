@@ -1,6 +1,7 @@
 module SnapshotPage exposing (..)
 
 import Aptly.Config
+import Aptly.Generic
 import Aptly.Snapshot
 import Html
 import Html.Attributes
@@ -26,13 +27,20 @@ type State
 type Msg
     = State State
     | List (Result Http.Error (List Aptly.Snapshot.Snapshot))
+    | Change (Maybe Aptly.Snapshot.Snapshot) (Result Http.Error Aptly.Snapshot.Snapshot)
     | Delete Aptly.Snapshot.Snapshot (Result Http.Error String)
     | Request ((Result Http.Error String) -> Msg) (Http.Request String)
+    | RequestWithBody ((Result Http.Error Aptly.Snapshot.Snapshot) -> Msg) (Http.Request Aptly.Snapshot.Snapshot)
     | Force Bool
+    | SnapshotMsg Aptly.Snapshot.Msg
 
 deleteMsg : String -> Bool -> Aptly.Snapshot.Snapshot -> Msg
 deleteMsg server force snapshot =
     Request (Delete snapshot) <| Aptly.Snapshot.createDeleteRequest server force snapshot
+
+editMsg : String -> Aptly.Snapshot.Snapshot -> Aptly.Snapshot.Snapshot -> Msg
+editMsg server oldSnapshot newSnapshot =
+    RequestWithBody (Change <| Just oldSnapshot) <| Aptly.Snapshot.createEditRequest server oldSnapshot.name newSnapshot
 
 init : Aptly.Config.Config -> (Model, Cmd Msg)
 init config =
@@ -53,6 +61,15 @@ update msg model =
         List (Ok snapshots) ->
             ({ model | snapshots = List.sortBy .createdAt snapshots |> List.reverse }, Cmd.none)
 
+        Change _ (Err _) ->
+            (model, Cmd.none)
+
+        Change Nothing (Ok _) ->
+            (model, Cmd.none)
+
+        Change (Just oldSnapshot) (Ok newSnapshot) ->
+            ({ model | state = Listing, snapshots = Aptly.Generic.replace model.snapshots oldSnapshot newSnapshot |> List.sortBy .createdAt |> List.reverse }, Cmd.none)
+
         Delete _ (Err _) ->
             (model, Cmd.none)
 
@@ -62,8 +79,23 @@ update msg model =
         Request result request ->
             (model, Http.send result request)
 
+        RequestWithBody result request ->
+            (model, Http.send result request)
+
         Force force ->
             ({ model | force = force }, Cmd.none)
+
+        SnapshotMsg msg ->
+            case model.state of
+                Changing changeSet ->
+                    let
+                        (snapshotModel, snapshotMsg) =
+                            Aptly.Snapshot.update msg changeSet.new
+                    in
+                        ({ model | state = Changing { changeSet | new = snapshotModel } }, Cmd.map SnapshotMsg snapshotMsg)
+
+                Listing ->
+                    (model, Cmd.none)
 
 view : Model -> Html.Html Msg
 view model =
@@ -76,6 +108,7 @@ view model =
                     List.intersperse (Html.hr [] [])
                         <| List.map
                             ( Aptly.Snapshot.view
+                                (\snapshot -> State <| Changing <| ChangeSet (Just snapshot) (Just snapshot))
                                 (\snapshot -> State <| Changing <|  ChangeSet (Just snapshot) Nothing)
                             )
                             model.snapshots
@@ -92,6 +125,14 @@ view model =
                                 ]
                             , Html.button [ Html.Events.onClick <| State Listing ] [ Html.text "Cancel" ]
                             , Html.button [ Html.Events.onClick <| (deleteMsg model.config.server model.force oldSnapshot) ] [ Html.text "Delete" ]
+                            ]
+
+                        (Just oldSnapshot, Just newSnapshot) ->
+                            [ Aptly.Snapshot.viewForm
+                                (State Listing)
+                                (editMsg model.config.server oldSnapshot)
+                                SnapshotMsg
+                                newSnapshot
                             ]
 
                         _ ->
