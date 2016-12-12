@@ -24,27 +24,17 @@ type Msg
 
 createDeleteRequest : String -> Bool -> Snapshot -> Http.Request String
 createDeleteRequest server force snapshot =
-    Http.request
-        { method = "DELETE"
-        , headers = []
-        , url = server ++ "/api/snapshots/" ++ snapshot.name ++ (if force then "?force=1" else "")
-        , body = Http.emptyBody
-        , expect = Http.expectString
-        , timeout = Nothing
-        , withCredentials = False
-        }
+    Aptly.Generic.httpDelete
+        (server ++ "/api/snapshots/" ++ snapshot.name ++ (if force then "?force=1" else ""))
+        Http.emptyBody
+        Http.expectString
 
 createEditRequest : String -> String -> Snapshot -> Http.Request Snapshot
 createEditRequest server name snapshot =
-    Http.request
-        { method = "PUT"
-        , headers = []
-        , url = server ++ "/api/snapshots/" ++ name
-        , body = Http.jsonBody <| encodeJson snapshot
-        , expect = Http.expectJson decodeJson
-        , timeout = Nothing
-        , withCredentials = False
-        }
+    Aptly.Generic.httpPut
+        (server ++ "/api/snapshots/" ++ name)
+        (Http.jsonBody <| encodeJson snapshot)
+        (Http.expectJson decodeJson)
 
 createListRequest : String -> Http.Request (List Snapshot)
 createListRequest server =

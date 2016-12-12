@@ -29,27 +29,17 @@ type alias Repository =
 
 createDeleteRequest : String -> Bool -> Repository ->  Http.Request String
 createDeleteRequest server force repository =
-    Http.request
-        { method = "DELETE"
-        , headers = []
-        , url = server ++ "/api/publish/" ++ repository.prefix ++ "/" ++ repository.distribution ++ (if force then "?force=1" else "")
-        , body = Http.emptyBody
-        , expect = Http.expectString
-        , timeout = Nothing
-        , withCredentials = False
-        }
+    Aptly.Generic.httpDelete
+        (server ++ "/api/publish/" ++ repository.prefix ++ "/" ++ repository.distribution ++ (if force then "?force=1" else ""))
+        Http.emptyBody
+        Http.expectString
 
 createEditRequest : String -> Repository -> Http.Request Repository
 createEditRequest server repository =
-    Http.request
-        { method = "PUT"
-        , headers = []
-        , url = server ++ "/api/publish/" ++ repository.prefix ++ "/" ++ repository.distribution
-        , body = Http.jsonBody <| encodeJson repository
-        , expect = Http.expectJson decodeJson
-        , timeout = Nothing
-        , withCredentials = False
-        }
+    Aptly.Generic.httpPut
+        (server ++ "/api/publish/" ++ repository.prefix ++ "/" ++ repository.distribution)
+        (Http.jsonBody <| encodeJson repository)
+        (Http.expectJson decodeJson)
 
 createListRequest : String -> Http.Request (List Repository)
 createListRequest server =

@@ -3,6 +3,35 @@ module Aptly.Generic exposing (..)
 import Html
 import Html.Attributes
 import Html.Events
+import Http
+
+http : String -> String -> Http.Body -> Http.Expect a -> Http.Request a
+http method url body expect =
+    Http.request
+        { method = "PUT"
+        , headers = []
+        , url = url
+        , body = body
+        , expect = expect
+        , timeout = Nothing
+        , withCredentials = False
+        }
+
+httpDelete : String -> Http.Body -> Http.Expect a -> Http.Request a
+httpDelete =
+    http "DELETE"
+
+httpGet : String -> Http.Body -> Http.Expect a -> Http.Request a
+httpGet =
+    http "GET"
+
+httpPost : String -> Http.Body -> Http.Expect a -> Http.Request a
+httpPost =
+    http "POST"
+
+httpPut : String -> Http.Body -> Http.Expect a -> Http.Request a
+httpPut =
+    http "PUT"
 
 replace : List a -> a -> a -> List a
 replace list old new =

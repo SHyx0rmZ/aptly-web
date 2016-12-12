@@ -24,39 +24,24 @@ type Msg
 
 createCreateRequest : String -> Repository -> Http.Request Repository
 createCreateRequest server repository =
-    Http.request
-        { method = "POST"
-        , headers = []
-        , url = server ++ "/api/repos"
-        , body = Http.jsonBody <| encodeJson True repository
-        , expect = Http.expectJson decodeJson
-        , timeout = Nothing
-        , withCredentials = False
-        }
+    Aptly.Generic.httpPost
+        (server ++ "/api/repos")
+        (Http.jsonBody <| encodeJson True repository)
+        (Http.expectJson decodeJson)
 
 createDeleteRequest : String -> Bool -> Repository ->  Http.Request String
 createDeleteRequest server force repository =
-        Http.request
-            { method = "DELETE"
-            , headers = []
-            , url = server ++ "/api/repos/" ++ repository.name ++ (if force then "?force=1" else "")
-            , body = Http.emptyBody
-            , expect = Http.expectString
-            , timeout = Nothing
-            , withCredentials = False
-            }
+    Aptly.Generic.httpDelete
+        (server ++ "/api/repos/" ++ repository.name ++ (if force then "?force=1" else ""))
+        Http.emptyBody
+        Http.expectString
 
 createEditRequest : String -> Repository -> Http.Request Repository
 createEditRequest server repository =
-    Http.request
-        { method = "PUT"
-        , headers = []
-        , url = server ++ "/api/repos/" ++ repository.name
-        , body = Http.jsonBody <| encodeJson False repository
-        , expect = Http.expectJson decodeJson
-        , timeout = Nothing
-        , withCredentials = False
-        }
+    Aptly.Generic.httpPut
+        (server ++ "/api/repos/" ++ repository.name)
+        (Http.jsonBody <| encodeJson False repository)
+        (Http.expectJson decodeJson)
 
 createListRequest : String -> Http.Request (List Repository)
 createListRequest server =
@@ -129,18 +114,9 @@ view editMsg deleteMsg repository =
 
 viewForm : Bool -> (Msg -> msg) -> msg -> (Repository -> msg) -> Repository -> Html.Html msg
 viewForm isNew wrapper cancelMsg saveMsg repository =
-    let
-        nameAction =
-            case isNew of
-                True ->
-                    Just NameChanged
-
-                False ->
-                    Nothing
-    in
-        Aptly.Generic.viewForm repository cancelMsg saveMsg wrapper
-            [ ("Name", repository.name, nameAction)
-            , ("Comment", repository.comment, Just CommentChanged)
-            , ("Default Distribution", repository.defaultDistribution, Just DefaultDistributionChanged)
-            , ("Default Component", repository.defaultComponent, Just DefaultComponentChanged)
-            ]
+    Aptly.Generic.viewForm repository cancelMsg saveMsg wrapper
+        [ ("Name", repository.name, if isNew then Just NameChanged else Nothing)
+        , ("Comment", repository.comment, Just CommentChanged)
+        , ("Default Distribution", repository.defaultDistribution, Just DefaultDistributionChanged)
+        , ("Default Component", repository.defaultComponent, Just DefaultComponentChanged)
+        ]
