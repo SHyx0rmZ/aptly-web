@@ -41,6 +41,7 @@ init : Aptly.Config.Config -> (Model, Cmd Msg)
 init config  =
     (Model config [] Listing False, Aptly.Published.Repository.createListRequest config.server |> Http.send List)
 
+update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
     case msg of
         List (Err _) ->
@@ -80,6 +81,7 @@ updateMsg : String -> Aptly.Published.Repository.Repository -> Aptly.Published.R
 updateMsg server oldRepository newRepository =
     RequestWithBody (Update oldRepository) <| Aptly.Published.Repository.createEditRequest server newRepository
 
+view : Model -> Html.Html Msg
 view model =
     Html.div []
         <| List.append

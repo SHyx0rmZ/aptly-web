@@ -1,18 +1,14 @@
 module Main exposing (..)
 
 import Aptly.Config
-import Aptly.Local.Repository
-import Aptly.Published.Repository
-import Aptly.Source
 import Html
 import Html.Events
-import Http
-import Json.Decode
 import LocalRepositoryPage
 import PackagePage
 import PublishedRepositoryPage
 import SnapshotPage
 
+main : Program Never Model Msg
 main =
     Html.program
         { init = init
