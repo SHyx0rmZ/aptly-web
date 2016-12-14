@@ -4,9 +4,10 @@ import Aptly.Config
 import Aptly.Generic.List
 import Aptly.Local.Repository
 import Html
+import Task
 
 type Msg
-    = ListMsg (Aptly.Generic.List.Msg Aptly.Local.Repository.Repository Aptly.Local.Repository.Msg)
+    = ListMsg (Aptly.Generic.List.Msg Aptly.Local.Repository.Repository Aptly.Local.Repository.Msg Msg)
     | Force Bool
 
 type alias RepositoryList =
@@ -15,10 +16,10 @@ type alias RepositoryList =
     , force : Bool
     }
 
-factory : Bool -> String -> Aptly.Generic.List.RequestFactory Aptly.Local.Repository.Repository Aptly.Local.Repository.Msg
+factory : Bool -> String -> Aptly.Generic.List.RequestFactory Aptly.Local.Repository.Repository Aptly.Local.Repository.Msg Msg
 factory force server =
     { create = Just <| (Aptly.Local.Repository.createCreateRequest server, Aptly.Local.Repository.viewForm True)
-    , delete = Just <| (Aptly.Local.Repository.createDeleteRequest force server, Aptly.Local.Repository.viewConfirmation force)
+    , delete = Just <| (Aptly.Local.Repository.createDeleteRequest force server, Aptly.Local.Repository.viewConfirmation force (\force -> Aptly.Generic.List.mapMsg (Force force)))
     , edit = Just <| (Aptly.Local.Repository.createEditRequest server, Aptly.Local.Repository.viewForm False)
     , list = (Aptly.Local.Repository.createListRequest server, Aptly.Local.Repository.view)
     }
@@ -34,6 +35,9 @@ init config =
 update : Msg -> RepositoryList -> (RepositoryList, Cmd Msg)
 update msg model =
     case msg of
+        ListMsg (Aptly.Generic.List.ParentMsg msg) ->
+            (model, Task.perform (\() -> msg) <| Task.succeed ())
+
         ListMsg msg ->
             let
                 (listModel, listMsg) =

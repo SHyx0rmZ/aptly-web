@@ -16,7 +16,7 @@ type State a
     | Deleting a
     | Editing a a
 
-type Msg a b
+type Msg a b c
     = List (Result Http.Error (List a))
     | State (State a)
     | Create (Result Http.Error a)
@@ -24,6 +24,7 @@ type Msg a b
     | Edit a (Result Http.Error a)
     | ItemMsg b
     | Request (State a)
+    | ParentMsg c
 
 type alias Model a =
     { items : List a
@@ -35,27 +36,32 @@ type alias DeleteRequest a = a -> Http.Request String
 type alias EditRequest a = a -> a -> Http.Request a
 type alias ListRequest a = Http.Request (List a)
 
-type alias CancelMsg a b = Msg a b
-type alias CommitMsg a b = (a -> Msg a b)
-type alias MsgWrapper a b = (b -> Msg a b)
+type alias CancelMsg a b c = Msg a b c
+type alias CommitMsg a b c = (a -> Msg a b c)
+type alias MsgWrapper a b c = (b -> Msg a b c)
+type alias MsgUnwrapper a b c = (Msg a b c -> c)
 
-type alias CreateView a b = MsgWrapper a b -> CancelMsg a b -> CommitMsg a b -> a -> Html.Html (Msg a b)
-type alias DeleteView a b = CancelMsg a b -> CommitMsg a b -> a -> Html.Html (Msg a b)
-type alias EditView a b = MsgWrapper a b -> CancelMsg a b -> CommitMsg a b -> a -> Html.Html (Msg a b)
-type alias ListView a b = Maybe (List (String, Msg a b)) -> a -> Html.Html (Msg a b)
+type alias CreateView a b c = MsgWrapper a b c -> CancelMsg a b c -> CommitMsg a b c -> a -> Html.Html (Msg a b c)
+type alias DeleteView a b c = CancelMsg a b c -> CommitMsg a b c -> a -> Html.Html (Msg a b c)
+type alias EditView a b c = MsgWrapper a b c -> CancelMsg a b c -> CommitMsg a b c -> a -> Html.Html (Msg a b c)
+type alias ListView a b c = Maybe (List (String, Msg a b c)) -> a -> Html.Html (Msg a b c)
 
-type alias RequestFactory a b =
-    { create : Maybe (CreateRequest a, CreateView a b)
-    , delete : Maybe (DeleteRequest a, DeleteView a b)
-    , edit : Maybe (EditRequest a, EditView a b)
-    , list : (ListRequest a, ListView a b)
+type alias RequestFactory a b c =
+    { create : Maybe (CreateRequest a, CreateView a b c)
+    , delete : Maybe (DeleteRequest a, DeleteView a b c)
+    , edit : Maybe (EditRequest a, EditView a b c)
+    , list : (ListRequest a, ListView a b c)
     }
 
-init : RequestFactory a b -> (Model a, Cmd (Msg a b))
+mapMsg : c -> Msg a b c
+mapMsg msg =
+    ParentMsg msg
+
+init : RequestFactory a b c -> (Model a, Cmd (Msg a b c))
 init requestFactory =
     (Model [] Listing, Tuple.first requestFactory.list |> Http.send List)
 
-update : (aMsg -> a -> (a, Cmd aMsg)) -> RequestFactory a b -> Msg a aMsg -> Model a -> (Model a, Cmd (Msg a aMsg))
+update : (b -> a -> (a, Cmd b)) -> RequestFactory a b c -> Msg a b c -> Model a -> (Model a, Cmd (Msg a b c))
 update updateItem factory msg model =
     case msg of
         List (Err _) ->
@@ -145,7 +151,10 @@ update updateItem factory msg model =
                     in
                         ({ model | state = Editing oldItem itemModel }, Cmd.map ItemMsg itemMsg)
 
-view : RequestFactory a b -> a ->  Model a -> Html.Html (Msg a b)
+        ParentMsg msg ->
+            (model, Cmd.none)
+
+view : RequestFactory a b c -> a ->  Model a -> Html.Html (Msg a b c)
 view requestFactory newItem model =
     Html.div []
         <| case model.state of
