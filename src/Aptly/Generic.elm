@@ -8,7 +8,7 @@ import Http
 http : String -> String -> Http.Body -> Http.Expect a -> Http.Request a
 http method url body expect =
     Http.request
-        { method = "PUT"
+        { method = method
         , headers = []
         , url = url
         , body = body
