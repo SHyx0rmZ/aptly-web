@@ -2,6 +2,8 @@ module Aptly.Snapshot exposing (..)
 
 import Aptly.Generic
 import Html
+import Html.Attributes
+import Html.Events
 import Http
 import Json.Decode
 import Json.Encode
@@ -22,18 +24,23 @@ type Msg
     = NameChanged String
     | DescriptionChanged String
 
-createDeleteRequest : String -> Bool -> Snapshot -> Http.Request String
-createDeleteRequest server force snapshot =
+--createCreateRequest : String -> Snapshot -> Http.Request Snapshot
+--createCreateRequest server snapshot =
+--    Aptly.Generic.httpPost
+--        (server ++ "/api/)
+
+createDeleteRequest : Bool -> String -> Snapshot -> Http.Request String
+createDeleteRequest force server snapshot =
     Aptly.Generic.httpDelete
         (server ++ "/api/snapshots/" ++ snapshot.name ++ (if force then "?force=1" else ""))
         Http.emptyBody
         Http.expectString
 
-createEditRequest : String -> String -> Snapshot -> Http.Request Snapshot
-createEditRequest server name snapshot =
+createEditRequest : String -> Snapshot -> Snapshot -> Http.Request Snapshot
+createEditRequest server oldSnapshot newSnapshot  =
     Aptly.Generic.httpPut
-        (server ++ "/api/snapshots/" ++ name)
-        (Http.jsonBody <| encodeJson snapshot)
+        (server ++ "/api/snapshots/" ++ oldSnapshot.name)
+        (Http.jsonBody <| encodeJson newSnapshot)
         (Http.expectJson decodeJson)
 
 createListRequest : String -> Http.Request (List Snapshot)
@@ -58,34 +65,40 @@ init : (Snapshot, Cmd msg)
 init =
     (Snapshot "" "" "", Cmd.none)
 
-update : Msg -> Maybe Snapshot -> (Maybe Snapshot, Cmd Msg)
-update msg maybeSnapshot =
-    case maybeSnapshot of
-        Nothing ->
-            (Nothing, Cmd.none)
+update : Msg -> Snapshot -> (Snapshot, Cmd Msg)
+update msg snapshot =
+    case msg of
+        NameChanged name ->
+            ({ snapshot | name = name }, Cmd.none)
 
-        Just snapshot ->
-            case msg of
-                NameChanged name ->
-                    (Just { snapshot | name = name }, Cmd.none)
+        DescriptionChanged description ->
+            ({ snapshot | description = description }, Cmd.none)
 
-                DescriptionChanged description ->
-                    (Just { snapshot | description = description }, Cmd.none)
-
-view : (Snapshot -> msg) -> (Snapshot -> msg) -> Snapshot -> Html.Html msg
-view updateMsg deleteMsg snapshot =
+view : Maybe (List (String, msg))-> Snapshot -> Html.Html msg
+view buttons snapshot =
     Aptly.Generic.viewTable snapshot
         [ ("Name", snapshot.name)
         , ("Description", snapshot.description)
         , ("Created At", snapshot.createdAt)
         ]
-        <| Just
-            [ ("Update", updateMsg snapshot)
-            , ("Delete", deleteMsg snapshot)
-            ]
+        buttons
 
-viewForm : msg -> (Snapshot -> msg) -> (Msg -> msg) -> Snapshot -> Html.Html msg
-viewForm cancelMsg saveMsg wrapper snapshot =
+viewConfirmation : Bool -> (Bool -> msg) -> msg -> (Snapshot -> msg) -> Snapshot -> Html.Html msg
+viewConfirmation force forceMsg cancelMsg deleteMsg snapshot =
+    Html.div []
+        [ Html.p [] [ Html.text <| "Are you sure you want to delete the snapshot \"" ++ snapshot.name ++ "\"?" ]
+        , Html.strong [] [ Html.text "Warning!" ]
+        , Html.text " This action cannot be undone!"
+        , Html.div []
+            [ Html.input [ Html.Events.onClick <| forceMsg <| not force, Html.Attributes.type_ "checkbox", Html.Attributes.checked force ] []
+            , Html.text "Force"
+            ]
+        , Html.button [ Html.Events.onClick <| cancelMsg ] [ Html.text "Cancel" ]
+        , Html.button [ Html.Events.onClick <| deleteMsg snapshot ] [ Html.text "Delete" ]
+        ]
+
+viewForm : (Msg -> msg) -> msg -> (Snapshot -> msg) -> Snapshot -> Html.Html msg
+viewForm wrapper cancelMsg saveMsg snapshot =
     Aptly.Generic.viewForm snapshot cancelMsg saveMsg wrapper
         [ ("Name", snapshot.name, Just NameChanged)
         , ("Description", snapshot.description, Just DescriptionChanged)

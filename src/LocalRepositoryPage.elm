@@ -1,18 +1,12 @@
 module LocalRepositoryPage exposing (..)
 
 import Aptly.Config
-import Aptly.Local.Repository
 import Aptly.Local.RepositoryList
 import Html
 
 type alias Model =
     { config : Aptly.Config.Config
     , repositoryList : Aptly.Local.RepositoryList.RepositoryList
-    }
-
-type alias ChangeSet =
-    { old : Maybe Aptly.Local.Repository.Repository
-    , new : Maybe Aptly.Local.Repository.Repository
     }
 
 type Msg
