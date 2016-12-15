@@ -154,8 +154,8 @@ update updateItem factory msg model =
         ParentMsg msg ->
             (model, Cmd.none)
 
-view : RequestFactory a b c -> a ->  Model a -> Html.Html (Msg a b c)
-view requestFactory newItem model =
+view : RequestFactory a b c -> a -> String -> Model a -> Html.Html (Msg a b c)
+view requestFactory newItem title model =
     Html.div []
         <| case model.state of
             Listing ->
@@ -165,7 +165,7 @@ view requestFactory newItem model =
                 in
                     List.append
                         (List.concat
-                            [ [ Html.h1 [] [ Html.text "Local Repositories" ] ]
+                            [ [ Html.h1 [] [ Html.text title ] ]
                             , if requestFactory.create /= Nothing then [ Html.button [ Html.Events.onClick <| State <| Creating newItem ] [ Html.text "Create" ] ] else []
                             , [ Html.hr [] [] ]
                             ])

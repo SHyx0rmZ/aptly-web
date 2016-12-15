@@ -50,4 +50,4 @@ update msg model =
 
 view : RepositoryList -> Html.Html Msg
 view model =
-    Html.map ListMsg <| Aptly.Generic.List.view (factory model.force model.config.server) (Aptly.Local.Repository.Repository "" "" "" "") model.list
+    Html.map ListMsg <| Aptly.Generic.List.view (factory model.force model.config.server) (Aptly.Local.Repository.Repository "" "" "" "") "Local Repositories" model.list
