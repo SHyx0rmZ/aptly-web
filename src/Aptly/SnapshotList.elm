@@ -50,4 +50,4 @@ update msg model =
 
 view : SnapshotList -> Html.Html Msg
 view model =
-    Html.map ListMsg <| Aptly.Generic.List.view (factory model.force model.config.server) (Aptly.Snapshot.Snapshot "" "" "") "Packages" model.list
+    Html.map ListMsg <| Aptly.Generic.List.view (factory model.force model.config.server) (Aptly.Snapshot.Snapshot "" "" "") "Snapshots" model.list

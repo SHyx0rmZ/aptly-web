@@ -63,6 +63,28 @@ viewTableRow (label, value) =
         , Html.td [ Html.Attributes.align "left" ] [ Html.text value ]
         ]
 
+viewConfirmation : Maybe (Bool, Bool -> msg) -> msg -> msg -> String -> Html.Html msg
+viewConfirmation maybeForce cancelMsg deleteMsg name =
+    let
+        forceDiv =
+            case maybeForce of
+                Nothing ->
+                    []
+
+                Just (force, forceMsg) ->
+                    [ Html.input [ Html.Events.onClick <| forceMsg <| not force, Html.Attributes.type_ "checkbox", Html.Attributes.checked force ] []
+                    , Html.text "Force"
+                    ]
+    in
+        Html.div []
+            [ Html.p [] [ Html.text <| "Are you sure you want to delete " ++ name ++ "?" ]
+            , Html.strong [] [ Html.text "Warning!" ]
+            , Html.text " This action cannot be undone!"
+            , Html.div [] forceDiv
+            , Html.button [ Html.Events.onClick <| cancelMsg ] [ Html.text "Cancel" ]
+            , Html.button [ Html.Events.onClick <| deleteMsg ] [ Html.text "Delete" ]
+            ]
+
 viewForm : a -> msgB -> (a -> msgB) -> (msgA -> msgB) -> List (String, String, Maybe (String -> msgA)) -> Html.Html msgB
 viewForm model cancelMsg saveMsg wrapper properties =
     Html.form []

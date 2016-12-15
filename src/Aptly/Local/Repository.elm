@@ -103,17 +103,8 @@ view buttons repository =
 
 viewConfirmation : Bool -> (Bool -> msg) -> msg -> (Repository -> msg) -> Repository -> Html.Html msg
 viewConfirmation force forceMsg cancelMsg deleteMsg repository =
-    Html.div []
-        [ Html.p [] [ Html.text <| "Are you sure you want to delete the repository \"" ++ repository.name ++ "\"?" ]
-        , Html.strong [] [ Html.text "Warning!" ]
-        , Html.text " This action cannot be undone!"
-        , Html.div []
-            [ Html.input [ Html.Events.onClick <| forceMsg <| not force, Html.Attributes.type_ "checkbox", Html.Attributes.checked force ] []
-            , Html.text "Force"
-            ]
-        , Html.button [ Html.Events.onClick <| cancelMsg ] [ Html.text "Cancel" ]
-        , Html.button [ Html.Events.onClick <| deleteMsg repository ] [ Html.text "Delete" ]
-        ]
+    Aptly.Generic.viewConfirmation (Just (force, forceMsg)) cancelMsg (deleteMsg repository)
+        <| "the repository \"" ++ repository.name ++ "\""
 
 viewForm : Bool -> (Msg -> msg) -> msg -> (Repository -> msg) -> Repository -> Html.Html msg
 viewForm isNew wrapper cancelMsg saveMsg repository =
