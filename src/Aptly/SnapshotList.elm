@@ -3,14 +3,14 @@ module Aptly.SnapshotList exposing (..)
 import Aptly.Config
 import Aptly.Generic.List
 import Aptly.Snapshot
-import Dispatch
+import Aptly.SnapshotListSynchronizer
 import Html
 import Task
 
 type Msg
     = ListMsg (Aptly.Generic.List.Msg Aptly.Snapshot.Snapshot Aptly.Snapshot.Msg Msg)
     | Force Bool
-    | Update (List Aptly.Snapshot.Snapshot)
+    | ListModification (Aptly.Generic.List.Modification Aptly.Snapshot.Snapshot)
 
 type alias SnapshotList =
     { config : Aptly.Config.Config
@@ -37,13 +37,20 @@ init config =
 update : Msg -> SnapshotList -> (SnapshotList, Cmd Msg)
 update msg model =
     case msg of
+        ListModification modification ->
+            let
+                (listModel, listMsg) =
+                    Aptly.Generic.List.update Aptly.Snapshot.update (factory model.force model.config.server) (Aptly.Generic.List.Modify modification) model.list
+            in
+                ({ model | list = listModel }, Cmd.map ListMsg listMsg)
+
         ListMsg (Aptly.Generic.List.ParentMsg msg) ->
             (model, Task.perform (\() -> msg) <| Task.succeed ())
 
         ListMsg msg ->
             case msg of
-                Aptly.Generic.List.List (Ok list) ->
-                    (model, Dispatch.dispatch Update list)
+                Aptly.Generic.List.Modify modification ->
+                    (model, Aptly.SnapshotListSynchronizer.modify modification)
 
                 _ ->
                     let
@@ -55,17 +62,10 @@ update msg model =
         Force force ->
             ({ model | force = force }, Cmd.none)
 
-        Update list ->
-            let
-                (listModel, listMsg) =
-                    Aptly.Generic.List.update Aptly.Snapshot.update (factory model.force model.config.server) (Aptly.Generic.List.List (Ok list)) model.list
-            in
-                ({ model | list = listModel }, Cmd.map ListMsg listMsg)
-
 view : SnapshotList -> Html.Html Msg
 view model =
     Html.map ListMsg <| Aptly.Generic.List.view (factory model.force model.config.server) (Aptly.Snapshot.Snapshot "" "" "") "Snapshots" model.list
 
 subscriptions : SnapshotList -> Sub Msg
 subscriptions model =
-    Dispatch.events [] Update
+    Aptly.SnapshotListSynchronizer.onModify ListModification

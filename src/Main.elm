@@ -124,5 +124,6 @@ view model =
 subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.batch
-        [ Sub.map SnapshotMsg <| SnapshotPage.subscriptions model.snapshot
+        [ Sub.map PublishedRepositoryMsg <| PublishedRepositoryPage.subscriptions model.publishedRepository
+        , Sub.map SnapshotMsg <| SnapshotPage.subscriptions model.snapshot
         ]

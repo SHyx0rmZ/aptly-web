@@ -16,12 +16,15 @@ type State a
     | Deleting a
     | Editing a a
 
-type Msg a b c
+type Modification a
     = List (Result Http.Error (List a))
-    | State (State a)
     | Create (Result Http.Error a)
     | Delete a (Result Http.Error String)
     | Edit a (Result Http.Error a)
+
+type Msg a b c
+    = State (State a)
+    | Modify (Modification a)
     | ItemMsg b
     | Request (State a)
     | ParentMsg c
@@ -59,15 +62,15 @@ mapMsg msg =
 
 init : RequestFactory a b c -> (Model a, Cmd (Msg a b c))
 init requestFactory =
-    (Model [] Listing, Tuple.first requestFactory.list |> Http.send List)
+    (Model [] Listing, Tuple.first requestFactory.list |> Http.send (Modify << List))
 
 update : (b -> a -> (a, Cmd b)) -> RequestFactory a b c -> Msg a b c -> Model a -> (Model a, Cmd (Msg a b c))
 update updateItem factory msg model =
     case msg of
-        List (Err _) ->
+        Modify (List (Err _)) ->
             (model, Cmd.none)
 
-        List (Ok items) ->
+        Modify (List (Ok items)) ->
             ({ model | items = items }, Cmd.none)
 
         State Listing ->
@@ -82,28 +85,28 @@ update updateItem factory msg model =
         State (Editing oldItem newItem) ->
             ({ model | state = Editing oldItem newItem }, Cmd.none)
 
-        Create (Err _) ->
+        Modify (Create (Err _)) ->
             (model, Cmd.none)
 
-        Create (Ok newItem) ->
+        Modify (Create (Ok newItem)) ->
             ({ model | state = Listing, items = newItem :: model.items }, Cmd.none)
 
-        Delete _ (Err _) ->
+        Modify (Delete _ (Err _)) ->
             (model, Cmd.none)
 
-        Delete oldItem (Ok _) ->
+        Modify (Delete oldItem (Ok _)) ->
             ({ model | state = Listing, items = List.filter (\item -> item /= oldItem) model.items }, Cmd.none)
 
-        Edit _ (Err _) ->
+        Modify (Edit _ (Err _)) ->
             (model, Cmd.none)
 
-        Edit oldItem (Ok newItem) ->
+        Modify (Edit oldItem (Ok newItem)) ->
             ({ model | state = Listing, items = Aptly.Generic.replace model.items oldItem newItem }, Cmd.none)
 
         Request state ->
             case model.state of
                 Listing ->
-                    (model, Http.send List <| Tuple.first factory.list)
+                    (model, Http.send (Modify << List) <| Tuple.first factory.list)
 
                 Creating newItem ->
                     case factory.create of
@@ -111,7 +114,7 @@ update updateItem factory msg model =
                             (model, Cmd.none)
 
                         Just (createRequest, _) ->
-                            (model, Http.send Create <| createRequest newItem)
+                            (model, Http.send (Modify << Create) <| createRequest newItem)
 
                 Deleting oldItem ->
                     case factory.delete of
@@ -119,7 +122,7 @@ update updateItem factory msg model =
                             (model, Cmd.none)
 
                         Just (deleteRequest, _) ->
-                            (model, Http.send (Delete oldItem) <| deleteRequest oldItem)
+                            (model, Http.send (Modify << Delete oldItem) <| deleteRequest oldItem)
 
                 Editing oldItem newItem ->
                     case factory.edit of
@@ -127,7 +130,7 @@ update updateItem factory msg model =
                             (model, Cmd.none)
 
                         Just (editRequest, _) ->
-                            (model, Http.send (Edit oldItem) <| editRequest oldItem newItem)
+                            (model, Http.send (Modify << Edit oldItem) <| editRequest oldItem newItem)
 
         ItemMsg msg ->
             case model.state of
@@ -167,6 +170,7 @@ view requestFactory newItem title model =
                         (List.concat
                             [ [ Html.h1 [] [ Html.text title ] ]
                             , if requestFactory.create /= Nothing then [ Html.button [ Html.Events.onClick <| State <| Creating newItem ] [ Html.text "Create" ] ] else []
+                            , [ Html.button [ Html.Events.onClick <| Request Listing ] [ Html.text "Refresh" ] ]
                             , [ Html.hr [] [] ]
                             ])
                         <| List.intersperse (Html.hr [] [])
