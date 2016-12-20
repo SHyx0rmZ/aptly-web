@@ -1,4 +1,4 @@
-module Aptly.Published.Repository exposing (Repository, createDeleteRequest, createEditRequest, createListRequest, decodeJson, view, viewForm)
+module Aptly.Published.Repository exposing (Msg, Repository, SourceKind(..), createDeleteRequest, createEditRequest, createListRequest, decodeJson, update, view, viewConfirmation, viewForm)
 
 import Aptly.Generic
 import Aptly.SigningOptions
@@ -27,18 +27,21 @@ type alias Repository =
     , signing : Maybe Aptly.SigningOptions.SigningOptions
     }
 
-createDeleteRequest : String -> Bool -> Repository ->  Http.Request String
-createDeleteRequest server force repository =
+type Msg
+    = Nothing
+
+createDeleteRequest : Bool -> String -> Repository ->  Http.Request String
+createDeleteRequest force server repository =
     Aptly.Generic.httpDelete
         (server ++ "/api/publish/" ++ repository.prefix ++ "/" ++ repository.distribution ++ (if force then "?force=1" else ""))
         Http.emptyBody
         Http.expectString
 
-createEditRequest : String -> Repository -> Http.Request Repository
-createEditRequest server repository =
+createEditRequest : String -> Repository -> Repository-> Http.Request Repository
+createEditRequest server oldRepository newRepository =
     Aptly.Generic.httpPut
-        (server ++ "/api/publish/" ++ repository.prefix ++ "/" ++ repository.distribution)
-        (Http.jsonBody <| encodeJson repository)
+        (server ++ "/api/publish/" ++ oldRepository.prefix ++ "/" ++ oldRepository.distribution)
+        (Http.jsonBody <| encodeJson newRepository)
         (Http.expectJson decodeJson)
 
 createListRequest : String -> Http.Request (List Repository)
@@ -86,8 +89,14 @@ encodeJson repository =
                 , ("Signing", Aptly.SigningOptions.encodeJson Aptly.SigningOptions.skip)
                 ]
 
-view : (Repository -> msg) -> (Repository -> msg) -> Repository -> Html.Html msg
-view updateMsg deleteMsg repository =
+update : Msg -> Repository -> (Repository, Cmd Msg)
+update msg repository =
+    case msg of
+        Nothing ->
+            (repository, Cmd.none)
+
+view : Maybe (List (String, msg)) -> Repository -> Html.Html msg
+view buttons repository =
     Aptly.Generic.viewTable repository
         [ ("Storage", repository.storage)
         , ("Prefix", repository.prefix)
@@ -95,13 +104,14 @@ view updateMsg deleteMsg repository =
         , ("Label", repository.label)
         , ("Origin", repository.origin)
         ]
-        <| Just
-            [ ("Update", updateMsg repository)
-            , ("Delete", deleteMsg repository)
-            ]
+        buttons
 
-viewForm : msg -> (Repository -> msg) -> Repository -> Html.Html msg
-viewForm cancelMsg updateMsg repository =
+viewConfirmation : Bool -> (Bool -> msg) -> msg -> (Repository -> msg) -> Repository -> Html.Html msg
+viewConfirmation force forceMsg cancelMsg deleteMsg repository =
+    Aptly.Generic.viewConfirmation (Just (force, forceMsg)) cancelMsg (deleteMsg repository) <| "the repository \"" ++ repository.prefix ++ "-" ++ repository.distribution ++ "\""
+
+viewForm : (Msg -> msg) -> msg -> (Repository -> msg) -> Repository -> Html.Html msg
+viewForm wrapper cancelMsg updateMsg repository =
     Html.div []
         <| case repository.sourceKind of
             Local ->
