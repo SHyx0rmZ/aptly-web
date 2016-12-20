@@ -33,3 +33,7 @@ update msg model =
 view : Model -> Html.Html Msg
 view model =
     Html.map SnapshotListMsg <| Aptly.SnapshotList.view model.snapshotList
+
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    Sub.map SnapshotListMsg <| Aptly.SnapshotList.subscriptions model.snapshotList

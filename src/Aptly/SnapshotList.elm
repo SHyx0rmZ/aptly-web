@@ -3,12 +3,14 @@ module Aptly.SnapshotList exposing (..)
 import Aptly.Config
 import Aptly.Generic.List
 import Aptly.Snapshot
+import Dispatch
 import Html
 import Task
 
 type Msg
     = ListMsg (Aptly.Generic.List.Msg Aptly.Snapshot.Snapshot Aptly.Snapshot.Msg Msg)
     | Force Bool
+    | Update (List Aptly.Snapshot.Snapshot)
 
 type alias SnapshotList =
     { config : Aptly.Config.Config
@@ -39,15 +41,31 @@ update msg model =
             (model, Task.perform (\() -> msg) <| Task.succeed ())
 
         ListMsg msg ->
-            let
-                (listModel, listMsg) =
-                    Aptly.Generic.List.update Aptly.Snapshot.update (factory model.force model.config.server) msg model.list
-            in
-                ({ model | list = listModel }, Cmd.map ListMsg listMsg)
+            case msg of
+                Aptly.Generic.List.List (Ok list) ->
+                    (model, Dispatch.dispatch Update list)
+
+                _ ->
+                    let
+                        (listModel, listMsg) =
+                            Aptly.Generic.List.update Aptly.Snapshot.update (factory model.force model.config.server) msg model.list
+                    in
+                        ({ model | list = listModel }, Cmd.map ListMsg listMsg)
 
         Force force ->
             ({ model | force = force }, Cmd.none)
 
+        Update list ->
+            let
+                (listModel, listMsg) =
+                    Aptly.Generic.List.update Aptly.Snapshot.update (factory model.force model.config.server) (Aptly.Generic.List.List (Ok list)) model.list
+            in
+                ({ model | list = listModel }, Cmd.map ListMsg listMsg)
+
 view : SnapshotList -> Html.Html Msg
 view model =
     Html.map ListMsg <| Aptly.Generic.List.view (factory model.force model.config.server) (Aptly.Snapshot.Snapshot "" "" "") "Snapshots" model.list
+
+subscriptions : SnapshotList -> Sub Msg
+subscriptions model =
+    Dispatch.events [] Update
