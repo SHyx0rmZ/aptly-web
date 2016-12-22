@@ -34,6 +34,10 @@ init config =
     in
         (SnapshotList config listModel False, Cmd.map ListMsg listMsg)
 
+items : SnapshotList -> List Aptly.Snapshot.Snapshot
+items snapshotList =
+    Aptly.Generic.List.items snapshotList.list
+
 update : Msg -> SnapshotList -> (SnapshotList, Cmd Msg)
 update msg model =
     case msg of

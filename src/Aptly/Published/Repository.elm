@@ -1,7 +1,9 @@
-module Aptly.Published.Repository exposing (Msg, Repository, SourceKind(..), createDeleteRequest, createEditRequest, createListRequest, decodeJson, update, view, viewConfirmation, viewForm)
+module Aptly.Published.Repository exposing (Msg(..), Repository, SourceKind(..), createDeleteRequest, createEditRequest, createListRequest, decodeJson, subscriptions, update, view, viewConfirmation, viewForm)
 
 import Aptly.Generic
 import Aptly.SigningOptions
+import Aptly.Snapshot
+import Aptly.SnapshotList
 import Aptly.Source
 import Html
 import Html.Attributes
@@ -16,7 +18,8 @@ type SourceKind
     | Snapshot
 
 type alias Repository =
-    { storage : String
+    { snapshotList : Maybe Aptly.SnapshotList.SnapshotList
+    , storage : String
     , prefix : String
     , distribution : String
     , sourceKind : SourceKind
@@ -28,7 +31,8 @@ type alias Repository =
     }
 
 type Msg
-    = Nothing
+    = SnapshotListMsg Aptly.SnapshotList.Msg
+    | ChangeSource Aptly.Source.Source String
 
 createDeleteRequest : Bool -> String -> Repository ->  Http.Request String
 createDeleteRequest force server repository =
@@ -50,7 +54,7 @@ createListRequest server =
 
 decodeJson : Json.Decode.Decoder Repository
 decodeJson =
-    Json.Decode.succeed Repository
+    Json.Decode.succeed (Repository Nothing)
         |: (Json.Decode.field "Storage" Json.Decode.string)
         |: (Json.Decode.field "Prefix" Json.Decode.string)
         |: (Json.Decode.field "Distribution" Json.Decode.string)
@@ -89,11 +93,32 @@ encodeJson repository =
                 , ("Signing", Aptly.SigningOptions.encodeJson Aptly.SigningOptions.skip)
                 ]
 
+subscriptions : Repository -> Sub Msg
+subscriptions repository =
+    case repository.snapshotList of
+        Nothing ->
+            Sub.none
+
+        Just snapshotList ->
+            Sub.map SnapshotListMsg <| Aptly.SnapshotList.subscriptions snapshotList
+
 update : Msg -> Repository -> (Repository, Cmd Msg)
 update msg repository =
     case msg of
-        Nothing ->
-            (repository, Cmd.none)
+        ChangeSource source snapshot ->
+            ({ repository | sources = Aptly.Generic.replace repository.sources source (Aptly.Source.Source source.component snapshot) }, Cmd.none)
+
+        SnapshotListMsg msg ->
+            case repository.snapshotList of
+                Nothing ->
+                    (repository, Cmd.none)
+
+                Just snapshotList ->
+                    let
+                        (snapshotListModel, snapshotListMsg) =
+                            Aptly.SnapshotList.update msg snapshotList
+                    in
+                        ({ repository | snapshotList = Just snapshotListModel }, Cmd.map SnapshotListMsg snapshotListMsg)
 
 view : Maybe (List (String, msg)) -> Repository -> Html.Html msg
 view buttons repository =
@@ -115,21 +140,31 @@ viewForm wrapper cancelMsg updateMsg repository =
     Html.div []
         <| case repository.sourceKind of
             Local ->
-                [ Html.text "local"
+                [ Html.h1 [] [ Html.text <| "Updating " ++ repository.prefix ++ "/" ++ repository.distribution ++ " (" ++ toString repository.sourceKind ++ ")" ]
+                , Html.hr [] []
                 , Html.button [ Html.Events.onClick <| cancelMsg ] [ Html.text "Cancel" ]
                 ]
 
             Snapshot ->
-                [ Html.text "snapshot"
-                , Html.hr [] []
-                , Html.div [] <| List.map viewFormRow repository.sources
-                , Html.hr [] []
-                , Html.button [ Html.Events.onClick <| cancelMsg ] [ Html.text "Cancel" ]
-                , Html.button [ Html.Events.onClick <| updateMsg repository ] [ Html.text "Update" ]
-                ]
+                case repository.snapshotList of
+                    Nothing ->
+                        [ Html.h1 [] [ Html.text <| "Updating " ++ repository.prefix ++ "/" ++ repository.distribution ++ " (" ++ toString repository.sourceKind ++ ")" ]
+                        , Html.hr [] []
+                        , Html.div [] [ Html.text "Error" ]
+                        , Html.button [ Html.Events.onClick <| cancelMsg ] [ Html.text "Cancel" ]
+                        ]
 
-viewFormRow : Aptly.Source.Source -> Html.Html msg
-viewFormRow source =
+                    Just snapshotList ->
+                        [ Html.h1 [] [ Html.text <| "Updating " ++ repository.prefix ++ "/" ++ repository.distribution ++ " (" ++ toString repository.sourceKind ++ ")" ]
+                        , Html.hr [] []
+                        , Html.div [] <| List.map (Html.map wrapper << viewFormRow snapshotList) repository.sources
+                        , Html.hr [] []
+                        , Html.button [ Html.Events.onClick <| cancelMsg ] [ Html.text "Cancel" ]
+                        , Html.button [ Html.Events.onClick <| updateMsg repository ] [ Html.text "Update" ]
+                        ]
+
+viewFormRow : Aptly.SnapshotList.SnapshotList -> Aptly.Source.Source -> Html.Html Msg
+viewFormRow snapshotList source =
     Html.table []
         [ Html.tr []
             [ Html.th [ Html.Attributes.align "right" ] [ Html.text "Component" ]
@@ -138,9 +173,19 @@ viewFormRow source =
         , Html.tr []
             [ Html.th [ Html.Attributes.align "right" ] [ Html.text "Name" ]
             , Html.td [ Html.Attributes.align "left" ]
-                [ Html.select []
-                    [ Html.option [ Html.Attributes.selected True ] [ Html.text source.name ]
-                    ]
+                [ Html.select [ onSelect <| ChangeSource source ]
+--                    [ Html.option [ Html.Attributes.selected True ] [ Html.text source.name ]
+--                    ]
+                    <| List.map (viewFormOption source) <| Aptly.SnapshotList.items snapshotList
                 ]
             ]
         ]
+
+viewFormOption : Aptly.Source.Source -> Aptly.Snapshot.Snapshot -> Html.Html Msg
+viewFormOption source snapshot =
+    Html.option [ Html.Attributes.selected <| snapshot.name == source.name ] [ Html.text snapshot.name ]
+
+
+onSelect : (String -> msg) -> Html.Attribute msg
+onSelect tagger =
+    Html.Events.on "change" (Json.Decode.map tagger Html.Events.targetValue)

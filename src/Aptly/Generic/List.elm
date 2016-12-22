@@ -64,6 +64,31 @@ init : RequestFactory a b c -> (Model a, Cmd (Msg a b c))
 init requestFactory =
     (Model [] Listing, Tuple.first requestFactory.list |> Http.send (Modify << List))
 
+items : Model a -> List a
+items model =
+    model.items
+
+subscriptions : (a -> Sub b) -> Model a -> Sub (Msg a b c)
+subscriptions itemSubscriptions model =
+    let
+        additionalItems =
+            case model.state of
+                Creating newItem ->
+                    [ newItem ]
+
+                Deleting oldItem ->
+                    [ oldItem ]
+
+                Editing oldItem newItem ->
+                    [ oldItem, newItem ]
+
+                Listing ->
+                    []
+    in
+        (model.items ++ additionalItems)
+            |> List.map (Sub.map ItemMsg << itemSubscriptions)
+            |> Sub.batch
+
 update : (b -> a -> (a, Cmd b)) -> RequestFactory a b c -> Msg a b c -> Model a -> (Model a, Cmd (Msg a b c))
 update updateItem factory msg model =
     case msg of
