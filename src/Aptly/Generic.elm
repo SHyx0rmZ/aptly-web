@@ -53,7 +53,9 @@ viewTable model properties maybeButtons =
 
                 Just buttons ->
                     [ Html.tr []
-                        <| List.map (\(label, action) -> Html.button [ Html.Events.onClick action ] [ Html.text label ]) buttons
+                        [ Html.td [ Html.Attributes.colspan 2 ]
+                            <| List.map (\(label, action) -> Html.button [ Html.Events.onClick action ] [ Html.text label ]) buttons
+                        ]
                     ]
 
 viewTableRow : (String, String) -> Html.Html msg

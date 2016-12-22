@@ -8,8 +8,6 @@ module Aptly.Local.Repository exposing (Msg, Repository, decodeJson, createCreat
 
 import Aptly.Generic
 import Html
-import Html.Attributes
-import Html.Events
 import Http
 import Json.Decode
 import Json.Encode
@@ -91,15 +89,19 @@ update msg repository =
         DefaultComponentChanged defaultComponent ->
             ({ repository | defaultComponent = defaultComponent }, Cmd.none)
 
-view : Maybe (List (String, msg)) -> Repository -> Html.Html msg
-view buttons repository =
+view : (Repository -> msg) -> Maybe (List (String, msg)) -> Repository -> Html.Html msg
+view createSnapshotMsg buttons repository =
     Aptly.Generic.viewTable repository
         [ ("Name", repository.name)
         , ("Comment", repository.comment)
         , ("Default Distribution", repository.defaultDistribution)
         , ("Default Component", repository.defaultComponent)
         ]
-        buttons
+        <| Maybe.map (\buttons -> List.append
+            buttons
+            [ ("Snapshot", createSnapshotMsg repository)
+            ])
+            buttons
 
 viewConfirmation : Bool -> (Bool -> msg) -> msg -> (Repository -> msg) -> Repository -> Html.Html msg
 viewConfirmation force forceMsg cancelMsg deleteMsg repository =

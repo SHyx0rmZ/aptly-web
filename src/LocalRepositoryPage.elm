@@ -20,6 +20,10 @@ init config =
     in
         (Model config repositoryListModel, Cmd.map RepositoryListMsg repositoryListMsg)
 
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    Sub.map RepositoryListMsg <| Aptly.Local.RepositoryList.subscriptions model.repositoryList
+
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
     case msg of

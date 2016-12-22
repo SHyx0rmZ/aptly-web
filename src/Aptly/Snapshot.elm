@@ -2,8 +2,6 @@ module Aptly.Snapshot exposing (..)
 
 import Aptly.Generic
 import Html
-import Html.Attributes
-import Html.Events
 import Http
 import Json.Decode
 import Json.Encode
@@ -24,10 +22,12 @@ type Msg
     = NameChanged String
     | DescriptionChanged String
 
---createCreateRequest : String -> Snapshot -> Http.Request Snapshot
---createCreateRequest server snapshot =
---    Aptly.Generic.httpPost
---        (server ++ "/api/)
+createCreateRequest : String -> String -> Snapshot -> Http.Request Snapshot
+createCreateRequest repository server snapshot =
+    Aptly.Generic.httpPost
+        (server ++ "/api/repos/" ++ repository ++ "/snapshots")
+        (Http.jsonBody <| encodeJson snapshot)
+        (Http.expectJson decodeJson)
 
 createDeleteRequest : Bool -> String -> Snapshot -> Http.Request String
 createDeleteRequest force server snapshot =
