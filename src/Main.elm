@@ -1,6 +1,7 @@
 module Main exposing (..)
 
 import Aptly.Config
+import FilePage
 import Html
 import Html.Events
 import LocalRepositoryPage
@@ -18,14 +19,17 @@ main =
         }
 
 type Page
-    = LocalRepository
+    = File
+    | LocalRepository
     | Package
     | PublishedRepository
     | Snapshot
 
+
 type alias Model =
     { page : Page
     , config : Aptly.Config.Config
+    , file : FilePage.Model
     , localRepository : LocalRepositoryPage.Model
     , package : PackagePage.Model
     , publishedRepository : PublishedRepositoryPage.Model
@@ -33,7 +37,8 @@ type alias Model =
     }
 
 type Msg
-    = LocalRepositoryMsg LocalRepositoryPage.Msg
+    = FileMsg FilePage.Msg
+    | LocalRepositoryMsg LocalRepositoryPage.Msg
     | PackageMsg PackagePage.Msg
     | Page Page
     | PublishedRepositoryMsg PublishedRepositoryPage.Msg
@@ -43,6 +48,9 @@ init : (Model, Cmd Msg)
 init =
     let
         config = Aptly.Config.Config "http://127.0.0.1:8080"
+
+        (filePageModel, filePageMsg) =
+            FilePage.init config
 
         (localRepositoryPageModel, localRepositoryPageMsg) =
             LocalRepositoryPage.init config
@@ -56,9 +64,10 @@ init =
         (snapshotPageModel, snapshotPageMsg) =
             SnapshotPage.init config
     in
-        ( Model LocalRepository config localRepositoryPageModel packagePageModel publishedRepositoryPageModel snapshotPageModel
+        ( Model LocalRepository config filePageModel localRepositoryPageModel packagePageModel publishedRepositoryPageModel snapshotPageModel
         , Cmd.batch
-            [ Cmd.map LocalRepositoryMsg localRepositoryPageMsg
+            [ Cmd.map FileMsg filePageMsg
+            , Cmd.map LocalRepositoryMsg localRepositoryPageMsg
             , Cmd.map PackageMsg packagePageMsg
             , Cmd.map PublishedRepositoryMsg publishedRepositoryPageMsg
             , Cmd.map SnapshotMsg snapshotPageMsg
@@ -68,6 +77,13 @@ init =
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
     case msg of
+        FileMsg fileMsg ->
+            let
+                (filePageModel, filePageMsg) =
+                    FilePage.update fileMsg model.file
+            in
+                ({ model | file = filePageModel }, Cmd.map FileMsg filePageMsg)
+
         LocalRepositoryMsg localRepositoryMsg ->
             let
                 (localRepositoryPageModel, localRepositoryPageMsg) =
@@ -102,12 +118,16 @@ update msg model =
 view : Model -> Html.Html Msg
 view model =
     Html.div []
-        [ Html.button [ Html.Events.onClick <| Page LocalRepository ] [ Html.text "Local Repositories" ]
+        [ Html.button [ Html.Events.onClick <| Page File ] [ Html.text "Files" ]
+        , Html.button [ Html.Events.onClick <| Page LocalRepository ] [ Html.text "Local Repositories" ]
         , Html.button [ Html.Events.onClick <| Page Package ] [ Html.text "Packages" ]
         , Html.button [ Html.Events.onClick <| Page PublishedRepository ] [ Html.text "Published Repositories" ]
         , Html.button [ Html.Events.onClick <| Page Snapshot ] [ Html.text "Snapshots" ]
         , Html.hr [] []
         , case model.page of
+            File ->
+                Html.map FileMsg <| FilePage.view model.file
+
             LocalRepository ->
                 Html.map LocalRepositoryMsg <| LocalRepositoryPage.view model.localRepository
 
@@ -124,7 +144,8 @@ view model =
 subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.batch
-        [ Sub.map LocalRepositoryMsg <| LocalRepositoryPage.subscriptions model.localRepository
+        [ Sub.map FileMsg <| FilePage.subscriptions model.file
+        , Sub.map LocalRepositoryMsg <| LocalRepositoryPage.subscriptions model.localRepository
         , Sub.map PublishedRepositoryMsg <| PublishedRepositoryPage.subscriptions model.publishedRepository
         , Sub.map SnapshotMsg <| SnapshotPage.subscriptions model.snapshot
         ]
