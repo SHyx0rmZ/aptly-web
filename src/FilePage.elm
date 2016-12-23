@@ -10,16 +10,34 @@ import Http
 import Json.Decode
 import Task
 
+type TargetDirectory
+    = New Directory
+    | Existing Directory
+
+type alias UploadState =
+    { directory : TargetDirectory
+    , file : List File
+    }
+
+type State
+    = Listing
+    | Uploading UploadState
+
 type alias Model =
     { config : Aptly.Config.Config
     , files : Dict.Dict Directory (List File)
+    , state : State
     }
 
 type Msg
     = Files Directory (Result Http.Error (List File))
     | Directories (Result Http.Error (List Directory))
+    | DirectoryChanged String
     | Delete Directory (Maybe File)
     | Deleted Directory (Maybe File) (Result Http.Error String)
+    | Radio TargetDirectory Bool
+    | State State
+    | Upload UploadState
 
 type alias Directory = String
 
@@ -63,7 +81,7 @@ getFiles server directory =
 
 init : Aptly.Config.Config -> (Model, Cmd Msg)
 init config =
-        (Model config Dict.empty, Http.send Directories <| getDirectories config.server)
+        (Model config Dict.empty Listing, Http.send Directories <| getDirectories config.server)
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
@@ -109,6 +127,19 @@ update msg model =
             in
                 ({ model | files = dictionary }, Cmd.batch task)
 
+        DirectoryChanged newDirectory ->
+            case model.state of
+                Uploading { directory, file } ->
+                    case directory of
+                        New _ ->
+                            ({ model | state = Uploading <| UploadState (New newDirectory) file }, Cmd.none)
+
+                        _ ->
+                            (model, Cmd.none)
+
+                _ ->
+                    (model, Cmd.none)
+
         Files _ (Err _) ->
             (model, Cmd.none)
 
@@ -118,19 +149,40 @@ update msg model =
             in
                 ({ model | files = Dict.insert directory files model.files }, Cmd.none)
 
+        Radio _ False ->
+            (model, Cmd.none)
+
+        Radio targetDirectory True ->
+            case model.state of
+                Uploading { file } ->
+                    ({ model | state = Uploading <| UploadState targetDirectory file }, Cmd.none)
+
+                _ ->
+                    (model, Cmd.none)
+
+        State state ->
+            ({ model | state = state }, Cmd.none)
+
+        Upload uploadState ->
+            (model, Cmd.none)
+
 view : Model -> Html.Html Msg
 view model =
-    Html.div []
-        [ Html.h1 [] [ Html.text "Files" ]
-        , Html.hr [] []
-        , viewTree model.files
-        ]
+    let
+        child =
+            case model.state of
+                Listing ->
+                    viewTree model.files
 
-viewTree : Dict.Dict Directory (List File) -> Html.Html Msg
-viewTree tree =
-    Html.ul []
-        <| List.map (\(directory, files) -> viewDirectory directory files)
-        <| Dict.toList tree
+                Uploading uploadState ->
+                    viewUpload model uploadState
+    in
+        Html.div []
+            [ Html.h1 [] [ Html.text "Files" ]
+            , Html.button [ Html.Events.onClick <| State <| Uploading <| UploadState (New "") [] ] [ Html.text "Upload file" ]
+            , Html.hr [] []
+            , child
+            ]
 
 viewDirectory : Directory -> (List File) -> Html.Html Msg
 viewDirectory directory files =
@@ -147,3 +199,53 @@ viewFile directory file =
         [ Html.text file
         , Html.button [ Html.Events.onClick <| Delete directory <| Just file ] [ Html.text "Delete" ]
         ]
+
+viewTree : Dict.Dict Directory (List File) -> Html.Html Msg
+viewTree tree =
+    Html.ul []
+        <| List.map (\(directory, files) -> viewDirectory directory files)
+        <| Dict.toList tree
+
+
+viewUpload : Model -> UploadState -> Html.Html Msg
+viewUpload model uploadState =
+    Html.form []
+        [ Html.label []
+            [ Html.text "Directory"
+--            , Html.input [ Html.Events.onInput (\directory -> State <| Uploading <| UploadState directory uploadState.file), Html.Attributes.value uploadState.directory ] []
+            , viewUploadDirectory (Dict.keys model.files) uploadState.directory
+            ]
+        , Html.br [] []
+        , Html.label []
+            [ Html.text "File"
+            , Html.input [ onInputs (\file -> State <| Uploading <| UploadState uploadState.directory file), Html.Attributes.type_ "file", Html.Attributes.accept "application/vnd.debian.binary-package", Html.Attributes.multiple True ] []
+            ]
+        , Html.br [] []
+        , Html.button [ Html.Events.onClick <| State Listing, Html.Attributes.type_ "button" ] [ Html.text "Cancel" ]
+        , Html.button [ Html.Events.onClick <| Upload uploadState, Html.Attributes.type_ "button" ] [ Html.text "Upload" ]
+        , Html.br [] []
+        , Html.progress [ Html.Attributes.max "100", Html.Attributes.value "30" ] []
+        ]
+
+viewUploadDirectory directories targetDirectory =
+    let
+        (checked, disabled, value) =
+            case targetDirectory of
+                New directory ->
+                    (True, False, directory)
+
+                Existing directory ->
+                    (False, True, "")
+    in
+        Html.ul [] <|
+            (Html.li [] [ Html.input [ Html.Events.onCheck <| Radio <| New "", Html.Attributes.type_ "radio", Html.Attributes.checked checked ] [], Html.input [ Html.Events.onInput <| DirectoryChanged, Html.Attributes.value value, Html.Attributes.disabled disabled ] [] ])
+            ::
+            (List.map (\directory -> Html.li [] [ Html.input [ Html.Events.onCheck <| Radio <| Existing directory, Html.Attributes.type_ "radio", Html.Attributes.checked (targetDirectory == Existing directory) ] [], Html.text directory ]) directories)
+
+onInputs : (List String -> msg) -> Html.Attribute msg
+onInputs tagger =
+    Html.Events.on "input" (Json.Decode.map tagger <| Json.Decode.at ["target", "files"] <| Json.Decode.list Json.Decode.string)
+
+onSelect : (String -> msg) -> Html.Attribute msg
+onSelect tagger =
+    Html.Events.on "change" (Json.Decode.map tagger Html.Events.targetValue)

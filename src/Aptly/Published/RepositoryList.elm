@@ -52,6 +52,7 @@ update msg repositoryList =
                     Aptly.Generic.List.update Aptly.Published.Repository.update (factory repositoryList.force repositoryList.config.server) newMsg repositoryList.list
                         |> Debug.log "list"
             in
+                -- not yet subscribed, need to delay the cmd
                 ({ repositoryList | list = listModel }, Cmd.batch
                     [ Cmd.map ListMsg listMsg
                     , Cmd.map (\msg -> ListMsg <| Aptly.Generic.List.ItemMsg <| Aptly.Published.Repository.SnapshotListMsg msg) snapshotListMsg
