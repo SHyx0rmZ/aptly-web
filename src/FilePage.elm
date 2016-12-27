@@ -2,6 +2,7 @@ module FilePage exposing (..)
 
 import Aptly.Config
 import Aptly.Generic
+import Aptly.Upload
 import Dict
 import Html
 import Html.Attributes
@@ -16,7 +17,7 @@ type TargetDirectory
 
 type alias UploadState =
     { directory : TargetDirectory
-    , file : List File
+    , files : List Aptly.Upload.File
     }
 
 type State
@@ -38,6 +39,7 @@ type Msg
     | Radio TargetDirectory Bool
     | State State
     | Upload UploadState
+    | Uploaded Directory Aptly.Upload.File (Result Http.Error String)
 
 type alias Directory = String
 
@@ -129,10 +131,10 @@ update msg model =
 
         DirectoryChanged newDirectory ->
             case model.state of
-                Uploading { directory, file } ->
+                Uploading { directory, files } ->
                     case directory of
                         New _ ->
-                            ({ model | state = Uploading <| UploadState (New newDirectory) file }, Cmd.none)
+                            ({ model | state = Uploading <| UploadState (New newDirectory) files }, Cmd.none)
 
                         _ ->
                             (model, Cmd.none)
@@ -144,18 +146,15 @@ update msg model =
             (model, Cmd.none)
 
         Files directory (Ok files) ->
-            let
-                _ = Debug.log directory files
-            in
-                ({ model | files = Dict.insert directory files model.files }, Cmd.none)
+            ({ model | files = Dict.insert directory files model.files }, Cmd.none)
 
         Radio _ False ->
             (model, Cmd.none)
 
         Radio targetDirectory True ->
             case model.state of
-                Uploading { file } ->
-                    ({ model | state = Uploading <| UploadState targetDirectory file }, Cmd.none)
+                Uploading { files } ->
+                    ({ model | state = Uploading <| UploadState targetDirectory files }, Cmd.none)
 
                 _ ->
                     (model, Cmd.none)
@@ -164,7 +163,39 @@ update msg model =
             ({ model | state = state }, Cmd.none)
 
         Upload uploadState ->
+            let
+                maybeFile =
+                    List.head uploadState.files
+
+                directory =
+                    case uploadState.directory of
+                        New directory ->
+                            directory
+
+                        Existing directory ->
+                            directory
+            in
+                case maybeFile of
+                    Nothing ->
+                        (model, Cmd.none)
+
+                    Just file ->
+                        (model, Http.send (Uploaded directory file) <| Aptly.Upload.request (model.config.server ++ "/api/files/" ++ directory) file)
+
+        Uploaded _ _ (Err _) ->
             (model, Cmd.none)
+
+        Uploaded directory file (Ok _) ->
+            ({ model | state = Listing, files = Dict.update directory
+                (\maybeList ->
+                    Just <| case maybeList of
+                        Nothing ->
+                            [ file.name ]
+
+                        Just files ->
+                            files ++ [ file.name ]
+                ) model.files }, Cmd.none)
+
 
 view : Model -> Html.Html Msg
 view model =
@@ -218,7 +249,7 @@ viewUpload model uploadState =
         , Html.br [] []
         , Html.label []
             [ Html.text "File"
-            , Html.input [ onInputs (\file -> State <| Uploading <| UploadState uploadState.directory file), Html.Attributes.type_ "file", Html.Attributes.accept "application/vnd.debian.binary-package", Html.Attributes.multiple True ] []
+            , Html.input [ onInputs (State << Uploading << UploadState uploadState.directory), Html.Attributes.type_ "file", Html.Attributes.accept "application/vnd.debian.binary-package", Html.Attributes.multiple True ] []
             ]
         , Html.br [] []
         , Html.button [ Html.Events.onClick <| State Listing, Html.Attributes.type_ "button" ] [ Html.text "Cancel" ]
@@ -242,9 +273,13 @@ viewUploadDirectory directories targetDirectory =
             ::
             (List.map (\directory -> Html.li [] [ Html.input [ Html.Events.onCheck <| Radio <| Existing directory, Html.Attributes.type_ "radio", Html.Attributes.checked (targetDirectory == Existing directory) ] [], Html.text directory ]) directories)
 
-onInputs : (List String -> msg) -> Html.Attribute msg
+onInputs : (Aptly.Upload.FileList -> msg) -> Html.Attribute msg
 onInputs tagger =
-    Html.Events.on "input" (Json.Decode.map tagger <| Json.Decode.at ["target", "files"] <| Json.Decode.list Json.Decode.string)
+--    Html.Events.on "input" (Json.Decode.map tagger <| Json.Decode.at [ "target", "files" ] <| Json.Decode.list <| Json.Decode.at [ "name" ] Json.Decode.string)
+    Html.Events.on "input"
+        <| Json.Decode.map tagger
+        <| Json.Decode.map Aptly.Upload.decodeFileList
+        <| Json.Decode.at [ "target", "files" ] Json.Decode.value
 
 onSelect : (String -> msg) -> Html.Attribute msg
 onSelect tagger =
