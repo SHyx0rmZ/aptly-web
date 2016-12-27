@@ -249,7 +249,7 @@ viewUpload model uploadState =
         , Html.br [] []
         , Html.label []
             [ Html.text "File"
-            , Html.input [ onInputs (State << Uploading << UploadState uploadState.directory), Html.Attributes.type_ "file", Html.Attributes.accept "application/vnd.debian.binary-package", Html.Attributes.multiple True ] []
+            , Html.input [ onInputs (State << Uploading << UploadState uploadState.directory), Html.Attributes.type_ "file", Html.Attributes.accept "application/vnd.debian.binary-package", Html.Attributes.multiple False ] []
             ]
         , Html.br [] []
         , Html.button [ Html.Events.onClick <| State Listing, Html.Attributes.type_ "button" ] [ Html.text "Cancel" ]
