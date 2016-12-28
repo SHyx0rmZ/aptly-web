@@ -1,4 +1,4 @@
-module Aptly.Published.Repository exposing (Msg(..), Repository, SourceKind(..), createDeleteRequest, createEditRequest, createListRequest, decodeJson, subscriptions, update, view, viewConfirmation, viewForm)
+module Aptly.Published.Repository exposing (Msg(..), Repository, SourceKind(..), createCreateRequest, createDeleteRequest, createEditRequest, createListRequest, decodeJson, subscriptions, update, view, viewConfirmation, viewCreate, viewForm)
 
 import Aptly.Generic
 import Aptly.SigningOptions
@@ -33,8 +33,21 @@ type alias Repository =
 type Msg
     = SnapshotListMsg Aptly.SnapshotList.Msg
     | ChangeSource Aptly.Source.Source String
+    | PrefixChanged String
+    | DistributionChanged String
+    | LabelChanged String
+    | OriginChanged String
+    | ArchitecturesChanged (List String)
+    | SourcesChanged (List Aptly.Source.Source)
 
-createDeleteRequest : Bool -> String -> Repository ->  Http.Request String
+createCreateRequest : String -> Repository -> Http.Request Repository
+createCreateRequest server repository =
+    Aptly.Generic.httpPost
+        (server ++ "/api/publish/" ++ repository.prefix)
+        (Http.jsonBody <| encodeJsonCreate repository)
+        (Http.expectJson decodeJson)
+
+createDeleteRequest : Bool -> String -> Repository -> Http.Request String
 createDeleteRequest force server repository =
     Aptly.Generic.httpDelete
         (server ++ "/api/publish/" ++ repository.prefix ++ "/" ++ repository.distribution ++ (if force then "?force=1" else ""))
@@ -93,6 +106,25 @@ encodeJson repository =
                 , ("Signing", Aptly.SigningOptions.encodeJson Aptly.SigningOptions.skip)
                 ]
 
+encodeJsonCreate : Repository -> Json.Encode.Value
+encodeJsonCreate repository =
+    case repository.sourceKind of
+        Local ->
+            Json.Encode.object
+                []
+
+        Snapshot ->
+            Json.Encode.object
+                [ ("SourceKind", Json.Encode.string <| String.toLower <| toString repository.sourceKind)
+                , ("Sources", Json.Encode.list <| List.map Aptly.Source.encodeJson repository.sources)
+                , ("Distribution", Json.Encode.string repository.distribution)
+                , ("Label", Json.Encode.string repository.label)
+                , ("Origin", Json.Encode.string repository.origin)
+                , ("ForceOverwrite", Json.Encode.bool False)
+                , ("Architectures", Json.Encode.list <| List.map Json.Encode.string repository.architectures)
+                , ("Signing", Aptly.SigningOptions.encodeJson Aptly.SigningOptions.skip)
+                ]
+
 subscriptions : Repository -> Sub Msg
 subscriptions repository =
     case repository.snapshotList of
@@ -120,6 +152,24 @@ update msg repository =
                     in
                         ({ repository | snapshotList = Just snapshotListModel }, Cmd.map SnapshotListMsg snapshotListMsg)
 
+        PrefixChanged prefix ->
+            ({ repository | prefix = prefix }, Cmd.none)
+
+        DistributionChanged distribution ->
+            ({ repository | distribution = distribution }, Cmd.none)
+
+        LabelChanged label ->
+            ({ repository | label = label }, Cmd.none)
+
+        OriginChanged origin ->
+            ({ repository | origin = origin }, Cmd.none)
+
+        ArchitecturesChanged architectures ->
+            ({ repository | architectures = architectures }, Cmd.batch [])
+
+        SourcesChanged sources ->
+            ({ repository | sources = sources }, Cmd.none)
+
 view : Maybe (List (String, msg)) -> Repository -> Html.Html msg
 view buttons repository =
     Aptly.Generic.viewTable repository
@@ -134,6 +184,120 @@ view buttons repository =
 viewConfirmation : Bool -> (Bool -> msg) -> msg -> (Repository -> msg) -> Repository -> Html.Html msg
 viewConfirmation force forceMsg cancelMsg deleteMsg repository =
     Aptly.Generic.viewConfirmation (Just (force, forceMsg)) cancelMsg (deleteMsg repository) <| "the repository \"" ++ repository.prefix ++ "-" ++ repository.distribution ++ "\""
+
+viewCreate : String -> Aptly.Source.Source -> (String -> msg) -> (Aptly.Source.Source -> msg) -> (Msg -> msg) -> msg -> (Repository -> msg) -> Repository -> Html.Html msg
+viewCreate newArchitecture newSource newArchitectureMsg newSourceMsg wrapper cancelMsg createMsg repository =
+    Html.div []
+        [ Html.fieldset []
+            [ Html.legend [] [ Html.text "Source kind" ]
+            , Html.label []
+                [ Html.input [ Html.Attributes.type_ "radio", Html.Attributes.checked True ] []
+                , Html.text "Snapshot"
+                ]
+            , Html.br [] []
+            , Html.label []
+                [ Html.input [ Html.Attributes.type_ "radio", Html.Attributes.checked False, Html.Attributes.disabled True ] []
+                , Html.text "Local repository"
+                ]
+            ]
+        , Html.br [] []
+        , Html.form []
+            [ Html.label []
+                [ Html.text "Prefix"
+                , Html.input [ Html.Events.onInput <| wrapper << PrefixChanged, Html.Attributes.value repository.prefix ] []
+                ]
+            , Html.br [] []
+            , Html.label []
+                [ Html.text "Distribution"
+                , Html.input [ Html.Events.onInput <| wrapper << DistributionChanged, Html.Attributes.value repository.distribution ] []
+                ]
+            , Html.br [] []
+            , Html.label []
+                [ Html.text "Label"
+                , Html.input [ Html.Events.onInput <| wrapper << LabelChanged, Html.Attributes.value repository.label ] []
+                ]
+            , Html.br [] []
+            , Html.label []
+                [ Html.text "Origin"
+                , Html.input [ Html.Events.onInput <| wrapper << OriginChanged, Html.Attributes.value repository.origin ] []
+                ]
+            , Html.br [] []
+            , Html.label []
+                [ Html.text "Force Overwrite"
+                , Html.input [ Html.Attributes.type_ "checkbox", Html.Attributes.checked False, Html.Attributes.disabled True ] []
+                ]
+            , Html.br [] []
+            , Html.fieldset []
+                [ Html.legend [] [ Html.text "Architectures" ]
+                , Html.fieldset []
+                    [ Html.legend [] [ Html.text "New architecture" ]
+                    , Html.input [ Html.Events.onInput newArchitectureMsg, Html.Attributes.value newArchitecture ] []
+                    , Html.br [] []
+                    , Html.button [ Html.Events.onClick <| wrapper <| ArchitecturesChanged <| repository.architectures ++ [ newArchitecture ], Html.Attributes.type_ "button", Html.Attributes.disabled <| newArchitecture == "" || List.member newArchitecture repository.architectures ] [ Html.text "Add architecture" ]
+                    ]
+                , Html.div [] <| List.map (Html.map wrapper << viewCreateArchitecture repository.architectures) repository.architectures
+                ]
+            , Html.br [] []
+            , Html.fieldset []
+                [ Html.legend [] [ Html.text "Sources" ]
+                , viewCreateNewSource newSource newSourceMsg wrapper repository
+                , Html.div [] <| List.map (Html.map wrapper << viewCreateSource repository.sources) repository.sources
+                ]
+            , Html.br [] []
+            , Html.button [ Html.Events.onClick <| cancelMsg, Html.Attributes.type_ "button"  ] [ Html.text "Cancel" ]
+            , Html.button [ Html.Events.onClick <| createMsg repository, Html.Attributes.type_ "button", Html.Attributes.disabled <| 0 == List.length repository.sources ] [ Html.text "Create" ]
+            ]
+        ]
+
+viewCreateArchitecture : List String -> String -> Html.Html Msg
+viewCreateArchitecture architectures architecture =
+    Html.div []
+        [ Html.text architecture
+        , Html.button [ Html.Events.onClick <| ArchitecturesChanged (List.filter ((/=) architecture) architectures), Html.Attributes.type_ "button" ] [ Html.text "Remove architecture" ]
+        ]
+
+viewCreateNewSource : Aptly.Source.Source -> (Aptly.Source.Source -> msg) -> (Msg -> msg) -> Repository -> Html.Html msg
+viewCreateNewSource newSource newSourceMsg wrapper repository =
+    case repository.snapshotList of
+        Nothing ->
+            Html.text "Loading snapshots..."
+
+        Just snapshotList ->
+            case Aptly.SnapshotList.items snapshotList of
+                [] ->
+                    Html.text "No snapshots available."
+
+                snapshots ->
+                    Html.fieldset []
+                        [ Html.legend [] [ Html.text "New source" ]
+                        , Html.label []
+                            [ Html.text "Component"
+                            , Html.input [ Html.Events.onInput (\component -> newSourceMsg <| Aptly.Source.Source component newSource.name), Html.Attributes.value newSource.component ] []
+                            ]
+                        , Html.br [] []
+                        , Html.label []
+                            [ Html.text "Name"
+                            , Html.select [ onSelect <| (\name -> newSourceMsg <| Aptly.Source.Source newSource.component name) ] <| List.map (\snapshot -> Html.option [ Html.Attributes.selected <| snapshot.name == newSource.name ] [ Html.text snapshot.name ]) snapshots
+                            ]
+                        , Html.br [] []
+                        , Html.button [ Html.Events.onClick <| wrapper <| SourcesChanged <| repository.sources ++ [ Aptly.Source.Source newSource.component newSource.name ], Html.Attributes.type_ "button", Html.Attributes.disabled <| newSource.component == "" || (List.member newSource.component <| List.map .component repository.sources) ] [ Html.text "Add source" ]
+                        ]
+
+viewCreateSource : List Aptly.Source.Source -> Aptly.Source.Source -> Html.Html Msg
+viewCreateSource sources source =
+    Html.div []
+        [ Html.table []
+            [ Html.tr []
+                [ Html.th [] [ Html.text "Component" ]
+                , Html.td [] [ Html.text source.component ]
+                ]
+            , Html.tr []
+                [ Html.th [] [ Html.text "Name" ]
+                , Html.td [] [ Html.text source.name ]
+                ]
+            ]
+        , Html.button [ Html.Events.onClick <| SourcesChanged (List.filter ((/=) source) sources), Html.Attributes.type_ "button" ] [ Html.text "Remove source" ]
+        ]
 
 viewForm : (Msg -> msg) -> msg -> (Repository -> msg) -> Repository -> Html.Html msg
 viewForm wrapper cancelMsg updateMsg repository =
