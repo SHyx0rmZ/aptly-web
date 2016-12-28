@@ -514,7 +514,7 @@ viewUploadProgress uploadStep =
 
 onInputs : (Aptly.Upload.FileList -> msg) -> Html.Attribute msg
 onInputs tagger =
-    Html.Events.on "input"
+    Html.Events.on "change"
         <| Json.Decode.map tagger
         <| Json.Decode.map Aptly.Upload.decodeFileList
         <| Json.Decode.at [ "target", "files" ] Json.Decode.value
