@@ -8,6 +8,7 @@ import Html
 import Html.Attributes
 import Html.Events
 import Http
+import Http.Progress
 import Json.Decode
 import Task
 
@@ -22,7 +23,7 @@ type alias UploadState =
 
 type State
     = Listing
-    | Uploading UploadState
+    | Uploading (Maybe (Http.Progress.Progress String)) UploadState
 
 type alias Model =
     { config : Aptly.Config.Config
@@ -38,8 +39,7 @@ type Msg
     | Deleted Directory (Maybe File) (Result Http.Error String)
     | Radio TargetDirectory Bool
     | State State
-    | Upload UploadState
-    | Uploaded Directory Aptly.Upload.FileList (Result Http.Error String)
+    | UploadProgress Directory Aptly.Upload.FileList (Http.Progress.Progress String)
 
 type alias Directory = String
 
@@ -85,9 +85,38 @@ init : Aptly.Config.Config -> (Model, Cmd Msg)
 init config =
         (Model config Dict.empty Listing, Http.send Directories <| getDirectories config.server)
 
+progressLoaded : Http.Progress.Progress String -> String
+progressLoaded progress =
+    case progress of
+        Http.Progress.Done _ ->
+            "100"
+
+        Http.Progress.Some { bytes, bytesExpected } ->
+            toString
+                <| round
+                <| (*) 100
+                <| toFloat bytes / toFloat bytesExpected
+
+        _ ->
+            "0"
+
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Sub.none
+    case model.state of
+        Uploading (Just _) uploadState ->
+            let
+                directory =
+                    case uploadState.directory of
+                        New directory ->
+                            directory
+
+                        Existing directory ->
+                            directory
+            in
+                Http.Progress.track "upload" (UploadProgress directory uploadState.files) <| Aptly.Upload.request (model.config.server ++ "/api/files/" ++ directory) uploadState.files
+
+        _ ->
+            Sub.none
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
@@ -131,10 +160,10 @@ update msg model =
 
         DirectoryChanged newDirectory ->
             case model.state of
-                Uploading { directory, files } ->
+                Uploading Nothing { directory, files } ->
                     case directory of
                         New _ ->
-                            ({ model | state = Uploading <| UploadState (New newDirectory) files }, Cmd.none)
+                            ({ model | state = Uploading Nothing <| UploadState (New newDirectory) files }, Cmd.none)
 
                         _ ->
                             (model, Cmd.none)
@@ -153,8 +182,8 @@ update msg model =
 
         Radio targetDirectory True ->
             case model.state of
-                Uploading { files } ->
-                    ({ model | state = Uploading <| UploadState targetDirectory files }, Cmd.none)
+                Uploading Nothing { files } ->
+                    ({ model | state = Uploading Nothing <| UploadState targetDirectory files }, Cmd.none)
 
                 _ ->
                     (model, Cmd.none)
@@ -162,22 +191,31 @@ update msg model =
         State state ->
             ({ model | state = state }, Cmd.none)
 
-        Upload uploadState ->
-            let
-                directory =
-                    case uploadState.directory of
-                        New directory ->
-                            directory
+        UploadProgress _ _ (Http.Progress.Fail error) ->
+            case model.state of
+                Uploading (Just _) uploadState ->
+                    ({ model | state = Uploading (Just <| Http.Progress.Fail error) uploadState }, Cmd.none)
 
-                        Existing directory ->
-                            directory
-            in
-                (model, Http.send (Uploaded directory uploadState.files) <| Aptly.Upload.request (model.config.server ++ "/api/files/" ++ directory) uploadState.files)
+                _ ->
+                    (model, Cmd.none)
 
-        Uploaded _ _ (Err _) ->
-            (model, Cmd.none)
+        UploadProgress _ _ Http.Progress.None ->
+            case model.state of
+                Uploading (Just _) uploadState ->
+                    ({ model | state = Uploading (Just Http.Progress.None) uploadState }, Cmd.none)
 
-        Uploaded directory files (Ok _) ->
+                _ ->
+                    (model, Cmd.none)
+
+        UploadProgress _ _ (Http.Progress.Some some) ->
+            case model.state of
+                Uploading (Just _) uploadState ->
+                    ({ model | state = Uploading (Just <| Http.Progress.Some some) uploadState }, Cmd.none)
+
+                _ ->
+                    (model, Cmd.none)
+
+        UploadProgress directory files (Http.Progress.Done _) ->
             ({ model | state = Listing, files = List.foldr (\file tree -> Dict.update directory
                 (\maybeList ->
                     Just <| case maybeList of
@@ -185,7 +223,7 @@ update msg model =
                             [ file.name ]
 
                         Just files ->
-                            files ++ [ file.name ]
+                            List.sort <| files ++ [ file.name ]
                 ) tree) model.files files }, Cmd.none)
 
 
@@ -194,15 +232,22 @@ view model =
     let
         child =
             case model.state of
+                Adding addState ->
+                    Html.div []
+                        [ Html.button [ Html.Events.onClick <| State Listing ] [ Html.text "Cancel" ]
+                        , Html.hr [] []
+                        , Html.select [] <| List.map (\item -> Html.option [] [ Html.text item.name ]) <| Aptly.Local.RepositoryList.items model.repositoryList
+                        ]
+
                 Listing ->
                     viewTree model.files
 
-                Uploading uploadState ->
-                    viewUpload model uploadState
+                Uploading maybeProgress uploadState ->
+                    viewUpload model.files maybeProgress uploadState
     in
         Html.div []
             [ Html.h1 [] [ Html.text "Files" ]
-            , Html.button [ Html.Events.onClick <| State <| Uploading <| UploadState (New "") [] ] [ Html.text "Upload file" ]
+            , Html.button [ Html.Events.onClick <| State <| Uploading Nothing <| UploadState (New "") [] ] [ Html.text "Upload file" ]
             , Html.hr [] []
             , child
             ]
@@ -230,26 +275,27 @@ viewTree tree =
         <| Dict.toList tree
 
 
-viewUpload : Model -> UploadState -> Html.Html Msg
-viewUpload model uploadState =
+viewUpload : Dict.Dict Directory (List File) -> Maybe (Http.Progress.Progress String) -> UploadState -> Html.Html Msg
+viewUpload tree maybeProgress uploadState =
     Html.form []
         [ Html.label []
             [ Html.text "Directory"
 --            , Html.input [ Html.Events.onInput (\directory -> State <| Uploading <| UploadState directory uploadState.file), Html.Attributes.value uploadState.directory ] []
-            , viewUploadDirectory (Dict.keys model.files) uploadState.directory
+            , viewUploadDirectory (Dict.keys tree) uploadState.directory
             ]
         , Html.br [] []
         , Html.label []
             [ Html.text "File"
-            , Html.input [ onInputs (State << Uploading << UploadState uploadState.directory), Html.Attributes.type_ "file", Html.Attributes.accept "application/vnd.debian.binary-package", Html.Attributes.multiple True ] []
+            , Html.input [ onInputs (State << Uploading Nothing << UploadState uploadState.directory), Html.Attributes.type_ "file", Html.Attributes.accept "application/vnd.debian.binary-package", Html.Attributes.multiple True ] []
             ]
         , Html.br [] []
         , Html.button [ Html.Events.onClick <| State Listing, Html.Attributes.type_ "button" ] [ Html.text "Cancel" ]
-        , Html.button [ Html.Events.onClick <| Upload uploadState, Html.Attributes.type_ "button" ] [ Html.text "Upload" ]
+        , Html.button [ Html.Events.onClick <| State <| Uploading (Just Http.Progress.None) uploadState, Html.Attributes.type_ "button" ] [ Html.text "Upload" ]
         , Html.br [] []
-        , Html.progress [ Html.Attributes.max "100", Html.Attributes.value "30" ] []
+        , viewUploadProgress maybeProgress
         ]
 
+viewUploadDirectory : List Directory -> TargetDirectory -> Html.Html Msg
 viewUploadDirectory directories targetDirectory =
     let
         (checked, disabled, value) =
@@ -265,9 +311,28 @@ viewUploadDirectory directories targetDirectory =
             ::
             (List.map (\directory -> Html.li [] [ Html.input [ Html.Events.onCheck <| Radio <| Existing directory, Html.Attributes.type_ "radio", Html.Attributes.checked (targetDirectory == Existing directory) ] [], Html.text directory ]) directories)
 
+viewUploadProgress : Maybe (Http.Progress.Progress String) -> Html.Html Msg
+viewUploadProgress maybeProgress =
+    case maybeProgress of
+        Nothing ->
+            Html.div [] []
+
+        Just progress ->
+            Html.div []
+                [ Html.span [] [ Html.text "Progress: " ]
+                , Html.progress
+                    [ Html.Attributes.value <| progressLoaded progress
+                    , Html.Attributes.max "100"
+                    ]
+                    [ Html.text <| (progressLoaded progress) ++ "%"
+                    ]
+                , Html.text <| (progressLoaded progress) ++ "%"
+                , Html.br [] []
+                , Html.text "Note: Progress may not be updating correctly"
+                ]
+
 onInputs : (Aptly.Upload.FileList -> msg) -> Html.Attribute msg
 onInputs tagger =
---    Html.Events.on "input" (Json.Decode.map tagger <| Json.Decode.at [ "target", "files" ] <| Json.Decode.list <| Json.Decode.at [ "name" ] Json.Decode.string)
     Html.Events.on "input"
         <| Json.Decode.map tagger
         <| Json.Decode.map Aptly.Upload.decodeFileList
