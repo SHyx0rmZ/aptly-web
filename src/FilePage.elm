@@ -2,6 +2,10 @@ module FilePage exposing (..)
 
 import Aptly.Config
 import Aptly.Generic
+import Aptly.Generic.List
+import Aptly.Generic.SelectableList
+import Aptly.Local.Repository
+import Aptly.Local.RepositoryListSynchronizer
 import Aptly.Upload
 import Dict
 import Html
@@ -10,7 +14,6 @@ import Html.Events
 import Http
 import Http.Progress
 import Json.Decode
-import Task
 
 type TargetDirectory
     = New Directory
@@ -21,29 +24,87 @@ type alias UploadState =
     , files : List Aptly.Upload.File
     }
 
+type alias AddState =
+    { directory : Directory
+    , file : Maybe File
+    , noRemove : Bool
+    , forceReplace : Bool
+    }
+
 type State
     = Listing
     | Uploading (Maybe (Http.Progress.Progress String)) UploadState
+    | Adding AddState
 
 type alias Model =
     { config : Aptly.Config.Config
     , files : Dict.Dict Directory (List File)
     , state : State
+    , repositories : Maybe (Aptly.Generic.SelectableList.SelectableList String)
     }
 
 type Msg
-    = Files Directory (Result Http.Error (List File))
+    = Add AddState (Maybe String)
+    | AddedResult AddState (Result Http.Error AddResult)
+    | Files Directory (Result Http.Error (List File))
     | Directories (Result Http.Error (List Directory))
     | DirectoryChanged String
     | Delete Directory (Maybe File)
     | Deleted Directory (Maybe File) (Result Http.Error String)
     | Radio TargetDirectory Bool
+    | RepositoryListModification (Aptly.Generic.List.Modification Aptly.Local.Repository.Repository)
+    | SelectRepository String
     | State State
+    | ToggleForceReplace Bool
+    | ToggleNoRemove Bool
     | UploadProgress Directory Aptly.Upload.FileList (Http.Progress.Progress String)
 
 type alias Directory = String
 
 type alias File = String
+
+type alias AddResult =
+    { failedFiles : List String
+    , report : AddReport
+    }
+
+type alias AddReport =
+    { warnings : List String
+    , added : List String
+    , removed : List String
+    }
+
+createAddRequest : String -> AddState -> String -> Http.Request AddResult
+createAddRequest server addState repository =
+    let
+        url =
+            case addState.file of
+                Nothing ->
+                    (server ++ "/api/repos/" ++ repository ++ "/file/" ++ (Http.encodeUri addState.directory))
+
+                Just file ->
+                    (server ++ "/api/repos/" ++ repository ++ "/file/" ++ (Http.encodeUri addState.directory) ++ "/" ++ (Http.encodeUri file))
+
+        options =
+            List.foldr (\(option, test) list -> if test then list ++ [ option ] else list) [] [ ("forceReplace=1", addState.forceReplace), ("noRemove=1", addState.noRemove) ]
+    in
+        Aptly.Generic.httpPost
+            (url ++ if options /= [] then "?" ++ (String.join "&" options) else "")
+            Http.emptyBody
+            (Http.expectJson decodeAddResult)
+
+decodeAddResult : Json.Decode.Decoder AddResult
+decodeAddResult =
+    Json.Decode.map2 AddResult
+        (Json.Decode.field "FailedFiles" <| Json.Decode.list Json.Decode.string)
+        (Json.Decode.field "Report" decodeAddReport)
+
+decodeAddReport : Json.Decode.Decoder AddReport
+decodeAddReport =
+    Json.Decode.map3 AddReport
+        (Json.Decode.field "Warnings" <| Json.Decode.list Json.Decode.string)
+        (Json.Decode.field "Added" <| Json.Decode.list Json.Decode.string)
+        (Json.Decode.field "Removed" <| Json.Decode.list Json.Decode.string)
 
 decodeDirectories : Json.Decode.Decoder (List Directory)
 decodeDirectories =
@@ -83,7 +144,7 @@ getFiles server directory =
 
 init : Aptly.Config.Config -> (Model, Cmd Msg)
 init config =
-        (Model config Dict.empty Listing, Http.send Directories <| getDirectories config.server)
+        (Model config Dict.empty Listing Nothing, Http.send Directories <| getDirectories config.server)
 
 progressLoaded : Http.Progress.Progress String -> String
 progressLoaded progress =
@@ -102,25 +163,58 @@ progressLoaded progress =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    case model.state of
-        Uploading (Just _) uploadState ->
-            let
-                directory =
-                    case uploadState.directory of
-                        New directory ->
-                            directory
+    Sub.batch
+        <| List.append
+            [ Aptly.Local.RepositoryListSynchronizer.onModify RepositoryListModification
+            ]
+            <| case model.state of
+                Uploading (Just _) uploadState ->
+                    let
+                        directory =
+                            case uploadState.directory of
+                                New directory ->
+                                    directory
 
-                        Existing directory ->
-                            directory
-            in
-                Http.Progress.track "upload" (UploadProgress directory uploadState.files) <| Aptly.Upload.request (model.config.server ++ "/api/files/" ++ directory) uploadState.files
+                                Existing directory ->
+                                    directory
+                    in
+                        [ Http.Progress.track "upload" (UploadProgress directory uploadState.files) <| Aptly.Upload.request (model.config.server ++ "/api/files/" ++ directory) uploadState.files
+                        ]
 
-        _ ->
-            Sub.none
+                _ ->
+                    []
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
     case msg of
+        Add addState Nothing ->
+            ({ model | state = Adding addState }, Cmd.none)
+
+        Add addState (Just repository) ->
+            (model, Http.send (AddedResult addState) <| createAddRequest model.config.server addState repository)
+
+        AddedResult _ (Err error) ->
+            (model, Cmd.none)
+
+        AddedResult addState (Ok result) ->
+            let
+                files =
+                    case addState.noRemove of
+                        True ->
+                            model.files
+
+                        False ->
+                            case addState.file of
+                                Nothing ->
+                                    Dict.remove addState.directory model.files
+
+                                Just file ->
+                                    Dict.update addState.directory (Maybe.map <| List.filter ((/=) file)) model.files
+                                        |> Dict.filter (curry (Tuple.second >> (/=) []))
+
+            in
+                ({ model | state = Listing, files = files }, Cmd.none)
+
         Delete directory Nothing ->
             (model, Http.send (Deleted directory Nothing) <| deleteDirectory model.config.server directory)
 
@@ -188,8 +282,40 @@ update msg model =
                 _ ->
                     (model, Cmd.none)
 
+        RepositoryListModification modification ->
+            case modification of
+                Aptly.Generic.List.List (Ok repositories) ->
+                    ({ model | repositories = List.map .name repositories |> Aptly.Generic.SelectableList.selectableList }, Cmd.none)
+
+                _ ->
+                    (model, Cmd.none)
+
+        SelectRepository repository ->
+            case model.repositories of
+                Nothing ->
+                    (model, Cmd.none)
+
+                Just repositories ->
+                    ({ model | repositories = Aptly.Generic.SelectableList.select repository repositories }, Cmd.none)
+
         State state ->
             ({ model | state = state }, Cmd.none)
+
+        ToggleForceReplace bool ->
+            case model.state of
+                Adding addState ->
+                    ({ model | state = Adding <| { addState | forceReplace = bool } }, Cmd.none)
+
+                _ ->
+                    (model, Cmd.none)
+
+        ToggleNoRemove bool ->
+            case model.state of
+                Adding addState ->
+                    ({ model | state = Adding <| { addState | noRemove = bool } }, Cmd.none)
+
+                _ ->
+                    (model, Cmd.none)
 
         UploadProgress _ _ (Http.Progress.Fail error) ->
             case model.state of
@@ -233,11 +359,7 @@ view model =
         child =
             case model.state of
                 Adding addState ->
-                    Html.div []
-                        [ Html.button [ Html.Events.onClick <| State Listing ] [ Html.text "Cancel" ]
-                        , Html.hr [] []
-                        , Html.select [] <| List.map (\item -> Html.option [] [ Html.text item.name ]) <| Aptly.Local.RepositoryList.items model.repositoryList
-                        ]
+                    viewAdd model.repositories addState
 
                 Listing ->
                     viewTree model.files
@@ -252,11 +374,32 @@ view model =
             , child
             ]
 
+viewAdd : Maybe (Aptly.Generic.SelectableList.SelectableList String) -> AddState -> Html.Html Msg
+viewAdd maybeRepositories addState =
+    case maybeRepositories of
+        Nothing ->
+            Html.button [ Html.Events.onClick <| State Listing ] [ Html.text "Cancel" ]
+
+        Just repositories ->
+            Html.div []
+                [ Html.select [ onSelect SelectRepository ] <| List.map (\item -> Html.option [] [ Html.text item ]) <| Aptly.Generic.SelectableList.items repositories
+                , Html.br [] []
+                , Html.input [ Html.Events.onClick <| ToggleForceReplace <| not addState.forceReplace, Html.Attributes.type_ "checkbox", Html.Attributes.checked addState.forceReplace ] []
+                , Html.text "Force replace"
+                , Html.br [] []
+                , Html.input [ Html.Events.onClick <| ToggleNoRemove <| not addState.noRemove, Html.Attributes.type_ "checkbox", Html.Attributes.checked addState.noRemove ] []
+                , Html.text "No remove"
+                , Html.br [] []
+                , Html.button [ Html.Events.onClick <| State Listing ] [ Html.text "Cancel" ]
+                , Html.button [ Html.Events.onClick <| Add addState (Just <| Aptly.Generic.SelectableList.selected repositories) ] [ Html.text "Add to repository" ]
+                ]
+
 viewDirectory : Directory -> (List File) -> Html.Html Msg
 viewDirectory directory files =
     Html.li []
         [ Html.text directory
         , Html.button [ Html.Events.onClick <| Delete directory Nothing ] [ Html.text "Delete" ]
+        , Html.button [ Html.Events.onClick <| Add (AddState directory Nothing False False) Nothing ] [ Html.text "Add to repository" ]
         , Html.ul []
             <| List.map (viewFile directory) files
         ]
@@ -266,6 +409,7 @@ viewFile directory file =
     Html.li []
         [ Html.text file
         , Html.button [ Html.Events.onClick <| Delete directory <| Just file ] [ Html.text "Delete" ]
+        , Html.button [ Html.Events.onClick <| Add (AddState directory (Just file) False False) Nothing ] [ Html.text "Add to repository" ]
         ]
 
 viewTree : Dict.Dict Directory (List File) -> Html.Html Msg

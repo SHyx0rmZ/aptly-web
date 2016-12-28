@@ -3,7 +3,6 @@ module Aptly.Upload exposing (..)
 import Json.Decode
 import Http
 import Native.Aptly.Upload
-import Task exposing (Task)
 
 type alias FileList = List File
 

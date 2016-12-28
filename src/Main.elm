@@ -14,7 +14,7 @@ import SnapshotPage
     TODO
 
     - [ ] make generic list sorted
-    - [/] upload files to local repository
+    - [x] upload files to local repository
     - [x] create snapshot from local repository
     - [ ] create published repository from snapshots
     - [ ] delete multiple snapshots at once

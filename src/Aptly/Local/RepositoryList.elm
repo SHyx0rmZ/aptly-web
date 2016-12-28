@@ -3,6 +3,7 @@ module Aptly.Local.RepositoryList exposing (..)
 import Aptly.Config
 import Aptly.Generic.List
 import Aptly.Local.Repository
+import Aptly.Local.RepositoryListSynchronizer
 import Aptly.Snapshot
 import Aptly.SnapshotListSynchronizer
 import Html
@@ -27,6 +28,7 @@ type Msg
     | Time Time.Time
     | RequestSnapshot Aptly.Local.Repository.Repository Aptly.Snapshot.Snapshot
     | CreateSnapshot (Result Http.Error Aptly.Snapshot.Snapshot)
+    | ListModification (Aptly.Generic.List.Modification Aptly.Local.Repository.Repository)
 
 type alias RepositoryList =
     { config : Aptly.Config.Config
@@ -53,9 +55,13 @@ init config =
             [ Cmd.map ListMsg listMsg
             ])
 
+items : RepositoryList -> List Aptly.Local.Repository.Repository
+items repositoryList =
+    Aptly.Generic.List.items repositoryList.list
+
 subscriptions : RepositoryList -> Sub Msg
 subscriptions model =
-    Sub.none
+    Aptly.Local.RepositoryListSynchronizer.onModify ListModification
 
 update : Msg -> RepositoryList -> (RepositoryList, Cmd Msg)
 update msg model =
@@ -64,9 +70,21 @@ update msg model =
             (model, Task.perform (\() -> msg) <| Task.succeed ())
 
         ListMsg msg ->
+            case msg of
+                Aptly.Generic.List.Modify modification ->
+                    (model, Aptly.Local.RepositoryListSynchronizer.modify modification)
+
+                _ ->
+                    let
+                        (listModel, listMsg) =
+                            Aptly.Generic.List.update Aptly.Local.Repository.update (factory model.force model.config.server) msg model.list
+                    in
+                        ({ model | list = listModel }, Cmd.map ListMsg listMsg)
+
+        ListModification modification ->
             let
                 (listModel, listMsg) =
-                    Aptly.Generic.List.update Aptly.Local.Repository.update (factory model.force model.config.server) msg model.list
+                    Aptly.Generic.List.update Aptly.Local.Repository.update (factory model.force model.config.server) (Aptly.Generic.List.Modify modification) model.list
             in
                 ({ model | list = listModel }, Cmd.map ListMsg listMsg)
 
