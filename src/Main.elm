@@ -132,7 +132,6 @@ view model =
     Html.div []
         [ Html.button [ Html.Events.onClick <| Page File ] [ Html.text "Files" ]
         , Html.button [ Html.Events.onClick <| Page LocalRepository ] [ Html.text "Local Repositories" ]
-        , Html.button [ Html.Events.onClick <| Page Package ] [ Html.text "Packages" ]
         , Html.button [ Html.Events.onClick <| Page PublishedRepository ] [ Html.text "Published Repositories" ]
         , Html.button [ Html.Events.onClick <| Page Snapshot ] [ Html.text "Snapshots" ]
         , Html.hr [] []
