@@ -21,9 +21,17 @@ var _SHyx0rmZ$aptly_web$Native_Aptly_Upload = function () {
         return _elm_lang$core$Native_List.fromArray(files);
     }
 
-    function request(url, file) {
-        var formData = new FormData();
-        formData.append('file', file.object);
+    function request(url, list) {
+        var formData = A3(
+            _elm_lang$core$Native_List.foldr,
+            F2(function (file, formData) {
+                formData.append('file', file.object);
+                return formData;
+            }),
+            new FormData(),
+            list
+        );
+
         return _elm_lang$http$Http_Internal$Request(
             A7(
                 _elm_lang$http$Http_Internal$RawRequest,

@@ -39,7 +39,7 @@ type Msg
     | Radio TargetDirectory Bool
     | State State
     | Upload UploadState
-    | Uploaded Directory Aptly.Upload.File (Result Http.Error String)
+    | Uploaded Directory Aptly.Upload.FileList (Result Http.Error String)
 
 type alias Directory = String
 
@@ -164,9 +164,6 @@ update msg model =
 
         Upload uploadState ->
             let
-                maybeFile =
-                    List.head uploadState.files
-
                 directory =
                     case uploadState.directory of
                         New directory ->
@@ -175,18 +172,13 @@ update msg model =
                         Existing directory ->
                             directory
             in
-                case maybeFile of
-                    Nothing ->
-                        (model, Cmd.none)
-
-                    Just file ->
-                        (model, Http.send (Uploaded directory file) <| Aptly.Upload.request (model.config.server ++ "/api/files/" ++ directory) file)
+                (model, Http.send (Uploaded directory uploadState.files) <| Aptly.Upload.request (model.config.server ++ "/api/files/" ++ directory) uploadState.files)
 
         Uploaded _ _ (Err _) ->
             (model, Cmd.none)
 
-        Uploaded directory file (Ok _) ->
-            ({ model | state = Listing, files = Dict.update directory
+        Uploaded directory files (Ok _) ->
+            ({ model | state = Listing, files = List.foldr (\file tree -> Dict.update directory
                 (\maybeList ->
                     Just <| case maybeList of
                         Nothing ->
@@ -194,7 +186,7 @@ update msg model =
 
                         Just files ->
                             files ++ [ file.name ]
-                ) model.files }, Cmd.none)
+                ) tree) model.files files }, Cmd.none)
 
 
 view : Model -> Html.Html Msg
@@ -249,7 +241,7 @@ viewUpload model uploadState =
         , Html.br [] []
         , Html.label []
             [ Html.text "File"
-            , Html.input [ onInputs (State << Uploading << UploadState uploadState.directory), Html.Attributes.type_ "file", Html.Attributes.accept "application/vnd.debian.binary-package", Html.Attributes.multiple False ] []
+            , Html.input [ onInputs (State << Uploading << UploadState uploadState.directory), Html.Attributes.type_ "file", Html.Attributes.accept "application/vnd.debian.binary-package", Html.Attributes.multiple True ] []
             ]
         , Html.br [] []
         , Html.button [ Html.Events.onClick <| State Listing, Html.Attributes.type_ "button" ] [ Html.text "Cancel" ]
