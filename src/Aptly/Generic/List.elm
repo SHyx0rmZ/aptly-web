@@ -130,7 +130,7 @@ update updateItem factory msg model =
             ({ model | state = Listing, items = Aptly.Generic.replace model.items oldItem newItem }, Cmd.none)
 
         Request state ->
-            case model.state of
+            case state of
                 Listing ->
                     (model, Http.send (Modify << List) <| Tuple.first factory.list)
 
