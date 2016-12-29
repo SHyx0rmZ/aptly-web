@@ -54,6 +54,7 @@ type alias RequestFactory a b c =
     , delete : Maybe (DeleteRequest a, DeleteView a b c)
     , edit : Maybe (EditRequest a, EditView a b c)
     , list : (ListRequest a, ListView a b c)
+    , listExtra : Maybe (List (String, c))
     }
 
 mapMsg : c -> Msg a b c
@@ -190,12 +191,21 @@ view requestFactory newItem title model =
                 let
                     (listRequest, listView) =
                         requestFactory.list
+
+                    extraButtons =
+                        case requestFactory.listExtra of
+                            Nothing ->
+                                []
+
+                            Just extraButtons ->
+                                extraButtons
                 in
                     List.append
                         (List.concat
                             [ [ Html.h1 [] [ Html.text title ] ]
                             , if requestFactory.create /= Nothing then [ Html.button [ Html.Events.onClick <| State <| Creating newItem ] [ Html.text "Create" ] ] else []
                             , [ Html.button [ Html.Events.onClick <| Request Listing ] [ Html.text "Refresh" ] ]
+                            , List.map (\(label, msg) -> Html.button [ Html.Events.onClick <| ParentMsg msg ] [ Html.text label ]) extraButtons
                             , [ Html.hr [] [] ]
                             ])
                         <| List.intersperse (Html.hr [] [])

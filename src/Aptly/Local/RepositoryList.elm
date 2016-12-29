@@ -43,6 +43,7 @@ factory force server =
     , delete = Just <| (Aptly.Local.Repository.createDeleteRequest force server, Aptly.Local.Repository.viewConfirmation force (Aptly.Generic.List.mapMsg << Force))
     , edit = Just <| (Aptly.Local.Repository.createEditRequest server, Aptly.Local.Repository.viewForm False)
     , list = (Aptly.Local.Repository.createListRequest server, Aptly.Local.Repository.view <| Aptly.Generic.List.mapMsg << State << CreatingSnapshot WaitingForTime)
+    , listExtra = Nothing
     }
 
 init : Aptly.Config.Config -> (RepositoryList, Cmd Msg)

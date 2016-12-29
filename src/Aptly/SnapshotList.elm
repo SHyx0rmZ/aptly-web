@@ -24,6 +24,7 @@ factory force server =
     , delete = Just (Aptly.Snapshot.createDeleteRequest force server, Aptly.Snapshot.viewConfirmation force (\force -> Aptly.Generic.List.mapMsg <| Force force))
     , edit = Just (Aptly.Snapshot.createEditRequest server, Aptly.Snapshot.viewForm)
     , list = (Aptly.Snapshot.createListRequest server, Aptly.Snapshot.view)
+    , listExtra = Nothing
     }
 
 init : Aptly.Config.Config -> (SnapshotList, Cmd Msg)

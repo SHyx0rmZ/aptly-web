@@ -28,6 +28,7 @@ factory newArchitecture newSource force server =
     , delete = Just (Aptly.Published.Repository.createDeleteRequest force server, Aptly.Published.Repository.viewConfirmation force (\force -> Aptly.Generic.List.mapMsg (Force force)))
     , edit = Just (Aptly.Published.Repository.createEditRequest server, Aptly.Published.Repository.viewForm)
     , list = (Aptly.Published.Repository.createListRequest server, Aptly.Published.Repository.view)
+    , listExtra = Nothing
     }
 
 init : Aptly.Config.Config -> (RepositoryList, Cmd Msg)
