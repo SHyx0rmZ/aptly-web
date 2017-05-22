@@ -40,11 +40,11 @@ type Msg
     | ArchitecturesChanged (List String)
     | SourcesChanged (List Aptly.Source.Source)
 
-createCreateRequest : Maybe Aptly.SigningOptions.SigningOptions -> String -> Repository -> Http.Request Repository
+createCreateRequest : Aptly.SigningOptions.SigningOptions -> String -> Repository -> Http.Request Repository
 createCreateRequest signing server repository =
     Aptly.Generic.httpPost
         (server ++ "/api/publish/" ++ repository.prefix)
-        (Http.jsonBody <| encodeJsonCreate { repository | signing = signing })
+        (Http.jsonBody <| encodeJsonCreate signing repository)
         (Http.expectJson decodeJson)
 
 createDeleteRequest : Bool -> String -> Repository -> Http.Request String
@@ -54,11 +54,11 @@ createDeleteRequest force server repository =
         Http.emptyBody
         Http.expectString
 
-createEditRequest : Maybe Aptly.SigningOptions.SigningOptions -> String -> Repository -> Repository-> Http.Request Repository
+createEditRequest : Aptly.SigningOptions.SigningOptions -> String -> Repository -> Repository-> Http.Request Repository
 createEditRequest signing server oldRepository newRepository =
     Aptly.Generic.httpPut
         (server ++ "/api/publish/" ++ oldRepository.prefix ++ "/" ++ oldRepository.distribution)
-        (Http.jsonBody <| encodeJson { newRepository | signing = signing })
+        (Http.jsonBody <| encodeJson signing newRepository)
         (Http.expectJson decodeJson)
 
 createListRequest : String -> Http.Request (List Repository)
@@ -90,24 +90,24 @@ decodeJsonSourceKind sourceKind =
         _ ->
             Err "unknown"
 
-encodeJson : Repository -> Json.Encode.Value
-encodeJson repository =
+encodeJson : Aptly.SigningOptions.SigningOptions -> Repository -> Json.Encode.Value
+encodeJson signing repository =
     case repository.sourceKind of
         Local ->
             Json.Encode.object
                 [ ("ForceOverwrite", Json.Encode.bool False)
-                , ("Signing", Aptly.SigningOptions.encodeJson Aptly.SigningOptions.skip)
+                , ("Signing", Aptly.SigningOptions.encodeJson signing)
                 ]
 
         Snapshot ->
             Json.Encode.object
                 [ ("ForceOverwrite", Json.Encode.bool False)
                 , ("Snapshots", Json.Encode.list <| List.map Aptly.Source.encodeJson repository.sources)
-                , ("Signing", Aptly.SigningOptions.encodeJson Aptly.SigningOptions.skip)
+                , ("Signing", Aptly.SigningOptions.encodeJson signing)
                 ]
 
-encodeJsonCreate : Repository -> Json.Encode.Value
-encodeJsonCreate repository =
+encodeJsonCreate : Aptly.SigningOptions.SigningOptions -> Repository -> Json.Encode.Value
+encodeJsonCreate signing repository =
     case repository.sourceKind of
         Local ->
             Json.Encode.object
@@ -122,7 +122,7 @@ encodeJsonCreate repository =
                 , ("Origin", Json.Encode.string repository.origin)
                 , ("ForceOverwrite", Json.Encode.bool False)
                 , ("Architectures", Json.Encode.list <| List.map Json.Encode.string repository.architectures)
-                , ("Signing", Aptly.SigningOptions.encodeJson Aptly.SigningOptions.skip)
+                , ("Signing", Aptly.SigningOptions.encodeJson signing)
                 ]
 
 subscriptions : Repository -> Sub Msg

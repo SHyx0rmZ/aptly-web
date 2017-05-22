@@ -1,6 +1,7 @@
 module Main exposing (..)
 
 import Aptly.Config
+import Aptly.SigningOptions
 import FilePage
 import Html
 import Html.Events
@@ -47,7 +48,7 @@ type Msg
 init : (Model, Cmd Msg)
 init =
     let
-        config = Aptly.Config.Config "http://127.0.0.1:8080" Nothing
+        config = Aptly.Config.Config "http://127.0.0.1:8080" Aptly.SigningOptions.skip
 
         (filePageModel, filePageMsg) =
             FilePage.init config

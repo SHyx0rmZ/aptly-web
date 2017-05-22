@@ -23,7 +23,7 @@ type Msg
     | NewArchitectureChanged String
     | NewSourceChanged Aptly.Source.Source
 
-factory : Maybe Aptly.SigningOptions.SigningOptions -> String -> Aptly.Source.Source -> Bool -> String -> Aptly.Generic.List.RequestFactory Aptly.Published.Repository.Repository Aptly.Published.Repository.Msg Msg
+factory : Aptly.SigningOptions.SigningOptions -> String -> Aptly.Source.Source -> Bool -> String -> Aptly.Generic.List.RequestFactory Aptly.Published.Repository.Repository Aptly.Published.Repository.Msg Msg
 factory signing newArchitecture newSource force server =
     { create = Just (Aptly.Published.Repository.createCreateRequest signing server, Aptly.Published.Repository.viewCreate newArchitecture newSource (Aptly.Generic.List.mapMsg << NewArchitectureChanged) (Aptly.Generic.List.mapMsg << NewSourceChanged))
     , delete = Just (Aptly.Published.Repository.createDeleteRequest force server, Aptly.Published.Repository.viewConfirmation force (\force -> Aptly.Generic.List.mapMsg (Force force)))
