@@ -41,6 +41,10 @@ encodeJson signingOptions =
             ]
 
 
+passphraseFile : String -> SigningOptions
+passphraseFile path =
+    SigningOptions Nothing (Just True) Nothing Nothing Nothing Nothing (Just path)
+
 skip : SigningOptions
 skip =
     SigningOptions (Just True) Nothing Nothing Nothing Nothing Nothing Nothing
