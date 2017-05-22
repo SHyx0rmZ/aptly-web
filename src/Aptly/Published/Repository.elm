@@ -40,11 +40,11 @@ type Msg
     | ArchitecturesChanged (List String)
     | SourcesChanged (List Aptly.Source.Source)
 
-createCreateRequest : String -> Repository -> Http.Request Repository
-createCreateRequest server repository =
+createCreateRequest : Maybe Aptly.SigningOptions.SigningOptions -> String -> Repository -> Http.Request Repository
+createCreateRequest signing server repository =
     Aptly.Generic.httpPost
         (server ++ "/api/publish/" ++ repository.prefix)
-        (Http.jsonBody <| encodeJsonCreate repository)
+        (Http.jsonBody <| encodeJsonCreate { repository | signing = signing })
         (Http.expectJson decodeJson)
 
 createDeleteRequest : Bool -> String -> Repository -> Http.Request String
@@ -54,11 +54,11 @@ createDeleteRequest force server repository =
         Http.emptyBody
         Http.expectString
 
-createEditRequest : String -> Repository -> Repository-> Http.Request Repository
-createEditRequest server oldRepository newRepository =
+createEditRequest : Maybe Aptly.SigningOptions.SigningOptions -> String -> Repository -> Repository-> Http.Request Repository
+createEditRequest signing server oldRepository newRepository =
     Aptly.Generic.httpPut
         (server ++ "/api/publish/" ++ oldRepository.prefix ++ "/" ++ oldRepository.distribution)
-        (Http.jsonBody <| encodeJson newRepository)
+        (Http.jsonBody <| encodeJson { newRepository | signing = signing })
         (Http.expectJson decodeJson)
 
 createListRequest : String -> Http.Request (List Repository)

@@ -3,6 +3,7 @@ module Aptly.Published.RepositoryList exposing (..)
 import Aptly.Config
 import Aptly.Generic.List
 import Aptly.Published.Repository
+import Aptly.SigningOptions
 import Aptly.SnapshotList
 import Aptly.Source
 import Html
@@ -22,11 +23,11 @@ type Msg
     | NewArchitectureChanged String
     | NewSourceChanged Aptly.Source.Source
 
-factory : String -> Aptly.Source.Source -> Bool -> String -> Aptly.Generic.List.RequestFactory Aptly.Published.Repository.Repository Aptly.Published.Repository.Msg Msg
-factory newArchitecture newSource force server =
-    { create = Just (Aptly.Published.Repository.createCreateRequest server, Aptly.Published.Repository.viewCreate newArchitecture newSource (Aptly.Generic.List.mapMsg << NewArchitectureChanged) (Aptly.Generic.List.mapMsg << NewSourceChanged))
+factory : Maybe Aptly.SigningOptions.SigningOptions -> String -> Aptly.Source.Source -> Bool -> String -> Aptly.Generic.List.RequestFactory Aptly.Published.Repository.Repository Aptly.Published.Repository.Msg Msg
+factory signing newArchitecture newSource force server =
+    { create = Just (Aptly.Published.Repository.createCreateRequest signing server, Aptly.Published.Repository.viewCreate newArchitecture newSource (Aptly.Generic.List.mapMsg << NewArchitectureChanged) (Aptly.Generic.List.mapMsg << NewSourceChanged))
     , delete = Just (Aptly.Published.Repository.createDeleteRequest force server, Aptly.Published.Repository.viewConfirmation force (\force -> Aptly.Generic.List.mapMsg (Force force)))
-    , edit = Just (Aptly.Published.Repository.createEditRequest server, Aptly.Published.Repository.viewForm)
+    , edit = Just (Aptly.Published.Repository.createEditRequest signing server, Aptly.Published.Repository.viewForm)
     , list = (Aptly.Published.Repository.createListRequest server, Aptly.Published.Repository.view)
     , listExtra = Nothing
     }
@@ -35,7 +36,7 @@ init : Aptly.Config.Config -> (RepositoryList, Cmd Msg)
 init config =
     let
         (listModel, listMsg) =
-            Aptly.Generic.List.init (factory "" (Aptly.Source.Source "" "") False config.server)
+            Aptly.Generic.List.init (factory config.signing "" (Aptly.Source.Source "" "") False config.server)
     in
         (RepositoryList config listModel False "" <| Aptly.Source.Source "" "", Cmd.map ListMsg listMsg)
 
@@ -54,7 +55,7 @@ update msg repositoryList =
                     Aptly.Generic.List.State (Aptly.Generic.List.Creating { newRepository | snapshotList = Just snapshotListModel })
 
                 (listModel, listMsg) =
-                    Aptly.Generic.List.update Aptly.Published.Repository.update (factory repositoryList.newArchitecture repositoryList.newSource repositoryList.force repositoryList.config.server) newMsg repositoryList.list
+                    Aptly.Generic.List.update Aptly.Published.Repository.update (factory repositoryList.config.signing repositoryList.newArchitecture repositoryList.newSource repositoryList.force repositoryList.config.server) newMsg repositoryList.list
             in
                 ({ repositoryList | list = listModel }, Cmd.batch
                     [ Cmd.map ListMsg listMsg
@@ -70,7 +71,7 @@ update msg repositoryList =
                     Aptly.Generic.List.State (Aptly.Generic.List.Editing oldRepository ({ newRepository | snapshotList = Just snapshotListModel }))
 
                 (listModel, listMsg) =
-                    Aptly.Generic.List.update Aptly.Published.Repository.update (factory repositoryList.newArchitecture repositoryList.newSource repositoryList.force repositoryList.config.server) newMsg repositoryList.list
+                    Aptly.Generic.List.update Aptly.Published.Repository.update (factory repositoryList.config.signing repositoryList.newArchitecture repositoryList.newSource repositoryList.force repositoryList.config.server) newMsg repositoryList.list
             in
                 ({ repositoryList | list = listModel }, Cmd.batch
                     [ Cmd.map ListMsg listMsg
@@ -80,7 +81,7 @@ update msg repositoryList =
         ListMsg (Aptly.Generic.List.ItemMsg (Aptly.Published.Repository.SnapshotListMsg (Aptly.SnapshotList.ListModification (Aptly.Generic.List.List (Ok snapshots))))) ->
             let
                 (listModel, listMsg) =
-                    Aptly.Generic.List.update Aptly.Published.Repository.update (factory repositoryList.newArchitecture repositoryList.newSource repositoryList.force repositoryList.config.server) (Aptly.Generic.List.ItemMsg <| Aptly.Published.Repository.SnapshotListMsg <| Aptly.SnapshotList.ListModification <| Aptly.Generic.List.List <| Ok snapshots) repositoryList.list
+                    Aptly.Generic.List.update Aptly.Published.Repository.update (factory repositoryList.config.signing repositoryList.newArchitecture repositoryList.newSource repositoryList.force repositoryList.config.server) (Aptly.Generic.List.ItemMsg <| Aptly.Published.Repository.SnapshotListMsg <| Aptly.SnapshotList.ListModification <| Aptly.Generic.List.List <| Ok snapshots) repositoryList.list
             in
                 case List.head snapshots of
                     Nothing ->
@@ -92,7 +93,7 @@ update msg repositoryList =
         ListMsg msg ->
             let
                 (listModel, listMsg) =
-                    Aptly.Generic.List.update Aptly.Published.Repository.update (factory repositoryList.newArchitecture repositoryList.newSource repositoryList.force repositoryList.config.server) msg repositoryList.list
+                    Aptly.Generic.List.update Aptly.Published.Repository.update (factory repositoryList.config.signing repositoryList.newArchitecture repositoryList.newSource repositoryList.force repositoryList.config.server) msg repositoryList.list
             in
                 ({ repositoryList | list = listModel }, Cmd.map ListMsg listMsg)
 
@@ -107,7 +108,7 @@ update msg repositoryList =
 
 view : RepositoryList -> Html.Html Msg
 view repositoryList =
-    Html.map ListMsg <| Aptly.Generic.List.view (factory repositoryList.newArchitecture repositoryList.newSource repositoryList.force repositoryList.config.server) (Aptly.Published.Repository.Repository Nothing "" "" "" Aptly.Published.Repository.Snapshot [] [] "" "" Nothing) "Published Repositories" repositoryList.list
+    Html.map ListMsg <| Aptly.Generic.List.view (factory repositoryList.config.signing repositoryList.newArchitecture repositoryList.newSource repositoryList.force repositoryList.config.server) (Aptly.Published.Repository.Repository Nothing "" "" "" Aptly.Published.Repository.Snapshot [] [] "" "" Nothing) "Published Repositories" repositoryList.list
 
 subscriptions : RepositoryList -> Sub Msg
 subscriptions repositoryList =

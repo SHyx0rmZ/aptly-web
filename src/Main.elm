@@ -47,7 +47,7 @@ type Msg
 init : (Model, Cmd Msg)
 init =
     let
-        config = Aptly.Config.Config "http://127.0.0.1:8080"
+        config = Aptly.Config.Config "http://127.0.0.1:8080" Nothing
 
         (filePageModel, filePageMsg) =
             FilePage.init config
